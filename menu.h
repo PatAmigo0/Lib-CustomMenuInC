@@ -20,6 +20,7 @@ typedef struct menu_item
 
 typedef struct __menu 
 {
+	int __ID;
     int count;
     menu_item* options;
     int running;
