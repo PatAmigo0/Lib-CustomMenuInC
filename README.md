@@ -7,6 +7,7 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 - **Windows-only implementation** (uses Windows API)
 - Customizable headers and footers
 - Colorful menu options with highlighting
+
 - Keyboard navigation (arrow keys + Enter)
 - Double buffering for smooth rendering
 - Callback functions for menu selections
@@ -177,6 +178,9 @@ int main()
     return 0;
 }
 ```
+
+## Graphical example
+<img width="3600" height="3399" alt="how menu works" src="https://github.com/user-attachments/assets/11fe3e66-bf14-4ddf-b7c7-992e154b651b" />
 
 ## Limitations
 
