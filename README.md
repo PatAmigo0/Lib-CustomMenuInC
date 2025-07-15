@@ -7,6 +7,7 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 - **Windows-only implementation** (uses Windows API)
 - Customizable headers and footers
 - Colorful menu options with highlighting
+
 - Keyboard navigation (arrow keys + Enter)
 - Double buffering for smooth rendering
 - Callback functions for menu selections
@@ -40,8 +41,6 @@ void menu_callback_example()
 
 int main()
 {
-    init_menu_system();
-    
     MENU main_menu = create_menu();
     
     menu_item option1 = {"Option 1", menu_callback_example};
@@ -180,12 +179,16 @@ int main()
 }
 ```
 
+## Graphical example
+<img width="3600" height="3399" alt="how menu works" src="https://github.com/user-attachments/assets/11fe3e66-bf14-4ddf-b7c7-992e154b651b" />
+
 ## Limitations
 
 - Windows-only implementation
 - Console resize handling has minimum size requirements
 - Limited to vertical menus
 - No mouse support (will be added in future)
+- Some window resizing visual bugs
 
 ## Contributing
 
