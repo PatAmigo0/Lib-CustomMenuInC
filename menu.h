@@ -34,6 +34,8 @@ typedef struct __menu
     
     const char* footer;
     const char* header;
+    
+    COORD menu_size;
 } __menu;
 
 typedef __menu* MENU;
