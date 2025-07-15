@@ -10,7 +10,7 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 - Keyboard navigation (arrow keys + Enter)
 - Double buffering for smooth rendering
 - Callback functions for menu selections
-- Dynamic menu resizing
+- Dynamically changes the size and location of the menu in the center of the console
 
 ## Installation
 
@@ -33,7 +33,7 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 ```c
 #include "menu.h"
 
-void menu_callback_example(void* m)
+void menu_callback_example()
 {
     printf("Option selected!\n");
 }
@@ -54,8 +54,8 @@ int main()
     change_footer(main_menu, "Navigate with arrow keys");
     
     enable_menu(main_menu);
-    
-    return 0;
+
+    clear_menus();
 }
 ```
 
@@ -90,6 +90,9 @@ int main()
 7. **`void clear_menu(MENU menu)`**  
    Destroys a menu and frees its resources.
 
+8. **`void clear_menus()`**
+   Destroys all the menus that you had in the program, and then shuts down the program.
+
 ### Advanced Features
 
 - **Color Customization** (defined in menu.h):
@@ -99,6 +102,7 @@ int main()
   #define HIGHLIGHT  "\033[47m\033[30m" // inverted (white)
   #define SUCCESS    "\033[42m\033[37m" // green
   #define ERROR_COLOR "\033[1;31m"      // red
+  #define RESET      "\033[0m" 
   ```
 
 - **Menu Policies**:
@@ -128,13 +132,13 @@ gcc your_app.c menu.c -o your_app
 ```c
 #include "menu.h"
 
-void file_action(void* m)
+void file_action()
 {
     printf("\nFile action selected!\n");
     system("pause");
 }
 
-void edit_action(void* m)
+void edit_action()
 {
     printf("\nEdit action selected!\n");
     system("pause");
@@ -144,7 +148,7 @@ void exit_action(void* m)
 {
     MENU menu = (MENU)m;
     printf("\nExiting...\n");
-    clear_menu(menu);
+    clear_menus();
     exit(0);
 }
 
