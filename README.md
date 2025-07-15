@@ -40,8 +40,6 @@ void menu_callback_example()
 
 int main()
 {
-    init_menu_system();
-    
     MENU main_menu = create_menu();
     
     menu_item option1 = {"Option 1", menu_callback_example};
@@ -186,6 +184,7 @@ int main()
 - Console resize handling has minimum size requirements
 - Limited to vertical menus
 - No mouse support (will be added in future)
+- Some window resizing visual bugs
 
 ## Contributing
 
