@@ -12,14 +12,13 @@
 
 typedef void (*menu_callback)(void* m);
 
-
 typedef struct menu_item 
 {
-    char* text;
+    const char* text;
     menu_callback callback;
 } menu_item;
 
-typedef struct menu 
+typedef struct __menu 
 {
     int count;
     menu_item* options;
@@ -34,23 +33,21 @@ typedef struct menu
     
     const char* footer;
     const char* header;
-} menu;
+} __menu;
 
-// Function prototypes
+typedef __menu* MENU;
+
+// function prototypes
 double tick();
 void init_menu_system();
-menu* create_menu();
-int add_option(menu* used_menu, menu_item* item);
-void change_header(menu* used_menu, const char* text);
-void change_footer(menu* used_menu, const char* text);
-void enable_menu(menu* used_menu);
-void clear_option(menu* used_menu, menu_item* option_to_clear);
-void change_menu_policy(menu* menu_to_change, int new_header_policy, int new_footer_policy);
-void clear_menu(menu* menu_to_clear);
+MENU create_menu();
+int add_option(MENU used_menu, menu_item* item);
+void change_header(MENU used_menu, const char* text);
+void change_footer(MENU used_menu, const char* text);
+void enable_menu(MENU used_menu);
+void clear_option(MENU used_menu, menu_item* option_to_clear);
+void change_menu_policy(MENU menu_to_change, int new_header_policy, int new_footer_policy);
+void clear_menu(MENU menu_to_clear);
 void clear_menus();
-
-// Maybe you can use it
-void _clear_buffer(HANDLE hBuffer);
-void donut();
 
 #endif
