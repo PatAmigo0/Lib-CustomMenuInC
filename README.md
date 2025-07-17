@@ -2,16 +2,19 @@
 
 This lightweight library provides a simple, easy-to-use menu system for Windows console applications. It features light customizable menu, keyboard navigation, and a clean abstraction layer.
 
+## Version
+```0.8.6 BETA```
+
 ## Features
 
 - **Windows-only implementation** (uses Windows API)
 - Customizable headers and footers
 - Colorful menu options with highlighting
-
 - Keyboard navigation (arrow keys + Enter)
 - Double buffering for smooth rendering
 - Callback functions for menu selections
 - Dynamically changes the size and location of the menu in the center of the console
+- **Memory-safe menu item creation** with `create_menu_item()`
 
 ## Installation
 
@@ -34,7 +37,7 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 ```c
 #include "menu.h"
 
-void menu_callback_example()
+void menu_callback_example(void* unused)
 {
     printf("Option selected!\n");
 }
@@ -43,11 +46,9 @@ int main()
 {
     MENU main_menu = create_menu();
     
-    menu_item option1 = {"Option 1", menu_callback_example};
-    menu_item option2 = {"Option 2", menu_callback_example};
-    
-    add_option(main_menu, &option1);
-    add_option(main_menu, &option2);
+    // create menu items using create_menu_item
+    add_option(main_menu, create_menu_item("Option 1", menu_callback_example));
+    add_option(main_menu, create_menu_item("Option 2", menu_callback_example));
     
     change_header(main_menu, "MAIN MENU");
     change_footer(main_menu, "Navigate with arrow keys");
@@ -63,7 +64,11 @@ int main()
 1. **`MENU create_menu()`**  
    Creates and returns a new menu object.
 
-2. **`int add_option(MENU your_menu, menu_item* your_item)`**  
+2. **`MENU_ITEM create_menu_item(const char* text, void (*callback)(void*))`**  
+   Creates a menu item with text and callback function.  
+   *This is the recommended way to create menu items*.
+
+3. **`int add_option(MENU your_menu, menu_item* your_item)`**  
    Adds an option to your menu.  
    - `menu_item` struct:
      ```c
@@ -72,25 +77,36 @@ int main()
          char* text;                   // display text
          void (*callback)(void* menu); // function to call when selected
      } menu_item;
+     // MENU_ITEM is the pointer version of menu_item, menu_item shouldn't be used.
      ```
 
-3. **`void change_header(MENU your_menu, const char* text)`**  
+4. **`void change_header(MENU your_menu, const char* text)`**  
    Sets the menu header text.
 
-4. **`void change_footer(MENU your_menu, const char* text)`**  
+5. **`void change_footer(MENU your_menu, const char* text)`**  
    Sets the menu footer text.
 
-5. **`void enable_menu(MENU your_menu)`**  
+6. **`void enable_menu(MENU your_menu)`**  
    Activates and displays the menu.
 
-6. **`void change_menu_policy(MENU menu, int header_policy, int footer_policy)`**  
+7. **`void change_menu_policy(MENU menu, int header_policy, int footer_policy)`**  
    Controls header/footer visibility (1 = show, 0 = hide).
 
-7. **`void clear_menu(MENU menu)`**  
+8. **`void clear_menu(MENU menu)`**  
    Destroys a menu and frees its resources.
 
-8. **`void clear_menus()`**
+9. **`void clear_menus()`**
    Destroys all the menus that you had in the program, and then shuts down the program.
+
+### Creating Menu Items
+
+Use `create_menu_item()` for memory-safe menu item creation:
+```c
+MENU_ITEM item = create_menu_item("Click Me", my_callback);
+
+// add to menu:
+add_option(my_menu, item);
+```
 
 ### Advanced Features
 
@@ -116,6 +132,7 @@ int main()
   {
       MENU m = (MENU)menu;
       printf("Selected from menu with %d options\n", m->count);
+      // access menu context if needed
   }
   ```
 
@@ -123,7 +140,7 @@ int main()
 
 Compile with your project if using static lib (example using GCC):
 ```bash
-gcc your_app.c menu.c -o your_app
+gcc <your_app.c> menu.c -o your_app
 ```
 
 ## Example Program
@@ -131,13 +148,13 @@ gcc your_app.c menu.c -o your_app
 ```c
 #include "menu.h"
 
-void file_action()
+void file_action(void* unused)
 {
     printf("\nFile action selected!\n");
     system("pause");
 }
 
-void edit_action()
+void edit_action(void* unused)
 {
     printf("\nEdit action selected!\n");
     system("pause");
@@ -153,22 +170,13 @@ void exit_action(void* m)
 
 int main()
 {
-    init_menu_system();
-    
     MENU main_menu = create_menu();
     
-    menu_item options[] =
-    {
-        {"Open File", file_action},
-        {"Save File", file_action},
-        {"Edit Content", edit_action},
-        {"Exit Program", exit_action}
-    };
-    
-    for(int i = 0; i < 4; i++)
-    {
-        add_option(main_menu, &options[i]);
-    }
+    // create menu items with create_menu_item
+    add_option(main_menu, create_menu_item("Open File", file_action));
+    add_option(main_menu, create_menu_item("Save File", file_action));
+    add_option(main_menu, create_menu_item("Edit Content", edit_action));
+    add_option(main_menu, create_menu_item("Exit Program", exit_action));
     
     change_header(main_menu, "TEXT EDITOR V2.4");
     change_footer(main_menu, "Use ↑↓ to navigate, Enter to select, Esc to exit");
@@ -182,6 +190,14 @@ int main()
 ## Graphical example
 <img width="3600" height="3399" alt="how menu works" src="https://github.com/user-attachments/assets/11fe3e66-bf14-4ddf-b7c7-992e154b651b" />
 
+## Key Updates
+
+- Version 0.8.3 -> 0.8.6 BETA
+- **`create_menu_item()` is now the recommended way** to create menu items (be careful of memory leaks if you don't use this)
+- All callbacks should have a `void*` parameter (can be NULL if unused)
+- Memory management is handled automatically for menu items
+- Provides better type safety and error prevention
+
 ## Limitations
 
 - Windows-only implementation
@@ -194,4 +210,4 @@ int main()
 
 Contributions are welcome! Please submit pull requests or open issues on GitHub.
 
-> **Note**: This library is designed specifically for Windows console applications and uses Windows API functions extensively.
+> **Note**: Always use `create_menu_item()` for creating menu items to ensure proper memory management and compatibility.
