@@ -42,7 +42,6 @@ typedef __menu* MENU;
 
 // function prototypes
 double tick();
-void init_menu_system();
 MENU create_menu();
 int add_option(MENU used_menu, menu_item* item);
 void change_header(MENU used_menu, const char* text);
