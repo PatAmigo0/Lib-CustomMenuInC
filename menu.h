@@ -18,11 +18,13 @@ typedef struct menu_item
     menu_callback callback;
 } menu_item;
 
+typedef menu_item* MENU_ITEM; 
+
 typedef struct __menu 
 {
 	int __ID;
     int count;
-    menu_item* options;
+    MENU_ITEM* options;
     int running;
     int need_redraw;
     int active_buffer;
@@ -42,14 +44,14 @@ typedef __menu* MENU;
 
 // function prototypes
 double tick();
-void init_menu_system();
 MENU create_menu();
-int add_option(MENU used_menu, menu_item* item);
-void change_header(MENU used_menu, const char* text);
-void change_footer(MENU used_menu, const char* text);
-void enable_menu(MENU used_menu);
-void clear_option(MENU used_menu, menu_item* option_to_clear);
-void change_menu_policy(MENU menu_to_change, int new_header_policy, int new_footer_policy);
+MENU_ITEM create_menu_item(const char* text, menu_callback callback);
+int add_option(const MENU used_menu, const MENU_ITEM item);
+void change_header(const MENU used_menu, const char* text);
+void change_footer(const MENU used_menu, const char* text);
+void enable_menu(const MENU used_menu);
+void clear_option(const MENU used_menu, MENU_ITEM option_to_clear);
+void change_menu_policy(const MENU menu_to_change, int new_header_policy, int new_footer_policy);
 void clear_menu(MENU menu_to_clear);
 void clear_menus();
 
