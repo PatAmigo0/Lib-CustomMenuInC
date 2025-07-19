@@ -3,7 +3,7 @@
 This lightweight library provides a simple, easy-to-use menu system for Windows console applications. It features light customizable menu, keyboard navigation, and a clean abstraction layer.
 
 ## Version
-```0.8.6 BETA```
+```0.8.7 BETA```
 
 ## Features
 
@@ -54,8 +54,6 @@ int main()
     change_footer(main_menu, "Navigate with arrow keys");
     
     enable_menu(main_menu);
-
-    clear_menus();
 }
 ```
 
@@ -122,8 +120,8 @@ add_option(my_menu, item);
 
 - **Menu Policies**:
   ```c
-  // hide header and footer:
-  change_menu_policy(my_menu, 0, 0);
+  // keep header and hide footer:
+  change_menu_policy(my_menu, 1, 0);
   ```
 
 - **Callback Functions**:
@@ -131,7 +129,7 @@ add_option(my_menu, item);
   void custom_callback(void* menu)
   {
       MENU m = (MENU)menu;
-      printf("Selected from menu with %d options\n", m->count);
+      printf("Selected from menu with %d options\n", get_menu_options_amount(m));
       // access menu context if needed
   }
   ```
@@ -146,6 +144,7 @@ gcc <your_app.c> menu.c -o your_app
 ## Example Program
 
 ```c
+#include <stdio.h>
 #include "menu.h"
 
 void file_action(void* unused)
@@ -164,8 +163,7 @@ void exit_action(void* m)
 {
     MENU menu = (MENU)m;
     printf("\nExiting...\n");
-    clear_menus();
-    exit(0);
+    clear_menus_and_exit();
 }
 
 int main()
@@ -192,7 +190,7 @@ int main()
 
 ## Key Updates
 
-- Version 0.8.3 -> 0.8.6 BETA
+- Version 0.8.6 BETA -> 0.8.7 BETA
 - **`create_menu_item()` is now the recommended way** to create menu items (be careful of memory leaks if you don't use this)
 - All callbacks should have a `void*` parameter (can be NULL if unused)
 - Memory management is handled automatically for menu items
