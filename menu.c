@@ -46,7 +46,7 @@ struct __menu_item
 
 struct __menu
 {
-	unsigned long long __ID;
+    unsigned long long __ID;
     int count;
     MENU_ITEM* options;
     int running;
@@ -55,13 +55,13 @@ struct __menu
     int width_policy;
     HANDLE hBuffer[2];
     int selected_index;
-    
+
     int footer_policy;
     int header_policy;
-    
+
     const char* footer;
     const char* header;
-    
+
     COORD menu_size;
 }; // protecting menu
 
@@ -77,7 +77,7 @@ void _lwrite_string(HANDLE hDestination, const char* restrict text);
 void _setConsoleActiveScreenBuffer(HANDLE hBufferToActivate);
 void _getMenuSize(MENU menu);
 BYTE _size_check(MENU menu, BYTE show_error, int extra_value);
-void _initWindow(SMALL_RECT* window, COORD size);
+void _initWindow(SMALL_RECT* restrict window, COORD size);
 void _clear_buffer(HANDLE hBuffer);
 int _check_menu(unsigned long long saved_id);
 HANDLE _block_input(DWORD* oldMode);
@@ -101,7 +101,47 @@ void change_menu_policy(MENU restrict menu_to_change, int new_header_policy, int
 
 void change_width_policy(MENU restrict menu_to_change, int new_width_policy)
 {
-	menu_to_change->width_policy = (new_width_policy && 1) || 0;
+    menu_to_change->width_policy = (new_width_policy && 1) || 0;
+}
+
+int get_menu_options_amount(MENU menu)
+{
+    return menu->count;
+}
+
+int is_menu_running(MENU menu)
+{
+    return menu->running;
+}
+
+int get_menu_selected_index(MENU menu)
+{
+    return menu->selected_index;
+}
+
+const char* get_menu_header(MENU menu)
+{
+    return menu->header;
+}
+
+const char* get_menu_footer(MENU menu)
+{
+    return menu->footer;
+}
+
+int get_menu_header_policy(MENU menu)
+{
+    return menu->header_policy;
+}
+
+int get_menu_footer_policy(MENU menu)
+{
+    return menu->footer_policy;
+}
+
+int get_menu_width_policy(MENU menu)
+{
+    return menu->width_policy;
 }
 
 MENU create_menu()
@@ -122,7 +162,7 @@ MENU create_menu()
     new_menu->footer_policy = 1;
     new_menu->header_policy = 1;
     new_menu->width_policy = 1;
-    new_menu->__ID = rand() * rand() + menus_amount + 1;
+    new_menu->__ID = rand() * rand();
 
     new_menu->hBuffer[0] = _createConsoleScreenBuffer();
     new_menu->hBuffer[1] = _createConsoleScreenBuffer();
@@ -149,7 +189,7 @@ MENU_ITEM create_menu_item(const char* restrict text, menu_callback callback)
     return item;
 }
 
-int add_option(MENU restrict used_menu, const MENU_ITEM restrict item)
+int add_option(MENU used_menu, const MENU_ITEM item)
 {
     if (!used_menu) return 0;
 
@@ -165,17 +205,17 @@ int add_option(MENU restrict used_menu, const MENU_ITEM restrict item)
     return 1;
 }
 
-void change_header(MENU restrict used_menu, const char* restrict text)
+void change_header(MENU used_menu, const char* restrict text)
 {
     used_menu->header = text;
 }
 
-void change_footer(MENU restrict used_menu, const char* restrict text)
+void change_footer(MENU used_menu, const char* restrict text)
 {
     used_menu->footer = text;
 }
 
-void enable_menu(MENU restrict used_menu)
+void enable_menu(MENU used_menu)
 {
     if (!used_menu || used_menu->count == 0)
         {
@@ -196,7 +236,7 @@ void enable_menu(MENU restrict used_menu)
     _renderMenu(used_menu);
 }
 
-void clear_option(MENU restrict used_menu, MENU_ITEM restrict option_to_clear)
+void clear_option(MENU used_menu, MENU_ITEM option_to_clear)
 {
     MENU_ITEM* o = used_menu->options;
     for (int i = 0; i < used_menu->count; i++)
@@ -221,7 +261,7 @@ void clear_option(MENU restrict used_menu, MENU_ITEM restrict option_to_clear)
             }
 }
 
-void clear_menu(MENU restrict menu_to_clear)
+void clear_menu(MENU menu_to_clear)
 {
     for (int i = 0; i < menus_amount; i++)
         if (menus_array[i] == menu_to_clear)
@@ -252,10 +292,10 @@ void clear_menu(MENU restrict menu_to_clear)
                         _setConsoleActiveScreenBuffer(hConsole);
                     }
                 else
-				{
-                	menus_array = (MENU*)realloc(menus_array, menus_amount * sizeof(MENU));
-					menus_array[0]->running = TRUE;	// in case so we always have something to hold our back
-				}
+                    {
+                        menus_array = (MENU*)realloc(menus_array, menus_amount * sizeof(MENU));
+                        menus_array[0]->running = TRUE;	// in case so we always have something to hold our back
+                    }
                 break;
             }
 }
@@ -267,8 +307,8 @@ void clear_menus()
 
 void clear_menus_and_exit()
 {
-	while(menus_amount > 0) clear_menu(menus_array[0]);
-	exit(0);
+    while(menus_amount > 0) clear_menu(menus_array[0]);
+    exit(0);
 }
 
 /*
@@ -375,7 +415,7 @@ BYTE _size_check(MENU menu, BYTE show_error, int extra_value)
 
 }
 
-void _initWindow(SMALL_RECT* window, COORD size)
+void _initWindow(SMALL_RECT* restrict window, COORD size)
 {
     window->Top = window->Left = 0;
     window->Right = size.X - 1;
@@ -384,9 +424,9 @@ void _initWindow(SMALL_RECT* window, COORD size)
 
 HANDLE _find_first_active_menu_buffer()
 {
-	for (int i = menus_amount - 1; i >= 0; i--)
-		if (menus_array[i]->running) return menus_array[i]->hBuffer[menus_array[i]->active_buffer]; // returns current active hBuffer
-	exit(1); // we should NEVER get here
+    for (int i = menus_amount - 1; i >= 0; i--)
+        if (menus_array[i]->running) return menus_array[i]->hBuffer[menus_array[i]->active_buffer]; // returns current active hBuffer
+    exit(1); // we should NEVER get here
 }
 
 void _clear_buffer(HANDLE hBuffer)
@@ -451,7 +491,7 @@ void _renderMenu(const MENU used_menu)
     register int current_width, current_height, old_width, old_height;
     int start_x, start_y;
     int y, x, i;
-	unsigned long long saved_id;
+    unsigned long long saved_id;
 
     BYTE size_check = 0, size_error = 0;
 
@@ -528,8 +568,8 @@ void _renderMenu(const MENU used_menu)
                 {
                     hBackBuffer = used_menu->hBuffer[used_menu->active_buffer ^ 1];
                     _clear_buffer(hBackBuffer);
-					_draw_at_position(hBackBuffer, 0, 0, "__ID: %llu", used_menu->__ID);
-					
+                    //_draw_at_position(hBackBuffer, 0, 0, "__ID: %llu", used_menu->__ID);
+
                     start_x = (current_width - menu_size.X) / 2;
                     start_y = (current_height - menu_size.Y) / 2;
 
@@ -629,11 +669,11 @@ end_render_loop:; // anchor
 
     // cleanup
     if (menus_amount == 0)
-    {
-    	SetConsoleMode(hStdin, old_mode);
-    	_setConsoleActiveScreenBuffer(hConsole);	
-	}
-	else
-		_setConsoleActiveScreenBuffer(_find_first_active_menu_buffer());
+        {
+            SetConsoleMode(hStdin, old_mode);
+            _setConsoleActiveScreenBuffer(hConsole);
+        }
+    else
+        _setConsoleActiveScreenBuffer(_find_first_active_menu_buffer());
     free(used_menu);
 }
