@@ -37,15 +37,21 @@ const char* error_message =
     "Make window bigger."
     RESET;
 
+struct __menu_item
+{
+    const char* text;
+    menu_callback callback;
+}; // protecting menu_item
+
 // restricted functions prototypes
 void _init_menu_system();
 void _init_hError();
 HANDLE _createConsoleScreenBuffer(void);
-void _draw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* text, ...);
-void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* text);
-void _write_string(HANDLE hDestination, const char* text, ...);
-void _vwrite_string(HANDLE hDestination, const char* text, va_list args);
-void _lwrite_string(HANDLE hDestination, const char* text);
+void _draw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text, ...);
+void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text);
+void _write_string(HANDLE hDestination, const char* restrict text, ...);
+void _vwrite_string(HANDLE hDestination, const char* restrict text, va_list args);
+void _lwrite_string(HANDLE hDestination, const char* restrict text);
 void _setConsoleActiveScreenBuffer(HANDLE hBufferToActivate);
 void _getMenuSize(MENU menu);
 BYTE _size_check(MENU menu, BYTE show_error, int extra_value);
@@ -54,7 +60,7 @@ void _clear_buffer(HANDLE hBuffer);
 int _check_menu(int saved_id);
 HANDLE _block_input(DWORD* oldMode);
 void _renderMenu(const MENU used_menu);
-void _show_error_and_wait(const char* message, ...);
+void _show_error_and_wait(const char* restrict message, ...);
 
 double tick()
 {
@@ -65,7 +71,7 @@ double tick()
     return (double)counter.QuadPart * 1000.0 / (double)freq.QuadPart;
 }
 
-void change_menu_policy(MENU menu_to_change, int new_header_policy, int new_footer_policy)
+void change_menu_policy(MENU restrict menu_to_change, int new_header_policy, int new_footer_policy)
 {
     menu_to_change->header_policy = new_header_policy;
     menu_to_change->footer_policy = new_footer_policy;
@@ -106,16 +112,16 @@ MENU create_menu()
     return new_menu;
 }
 
-MENU_ITEM create_menu_item(const char* text, menu_callback callback)
+MENU_ITEM create_menu_item(const char* restrict text, menu_callback callback)
 {
-    MENU_ITEM item = (MENU_ITEM)malloc(sizeof(menu_item));
+    MENU_ITEM item = (MENU_ITEM)malloc(sizeof(struct __menu_item));
     if (!item) return NULL;
     item->text = (text != NULL) ? strdup(text) : strdup(DEFAULT_MENU_TEXT);
     item->callback = (callback != NULL) ? callback : NULL;
     return item;
 }
 
-int add_option(const MENU used_menu, MENU_ITEM item)
+int add_option(MENU restrict used_menu, const MENU_ITEM restrict item)
 {
     if (!used_menu) return 0;
 
@@ -131,17 +137,17 @@ int add_option(const MENU used_menu, MENU_ITEM item)
     return 1;
 }
 
-void change_header(const MENU used_menu, const char* text)
+void change_header(MENU restrict used_menu, const char* restrict text)
 {
     used_menu->header = text;
 }
 
-void change_footer(MENU used_menu, const char* text)
+void change_footer(MENU restrict used_menu, const char* restrict text)
 {
     used_menu->footer = text;
 }
 
-void enable_menu(MENU used_menu)
+void enable_menu(MENU restrict used_menu)
 {
     if (!used_menu || used_menu->count == 0)
         {
@@ -162,7 +168,7 @@ void enable_menu(MENU used_menu)
     _renderMenu(used_menu);
 }
 
-void clear_option(const MENU used_menu, MENU_ITEM option_to_clear)
+void clear_option(MENU restrict used_menu, MENU_ITEM restrict option_to_clear)
 {
     MENU_ITEM* o = used_menu->options;
     for (int i = 0; i < used_menu->count; i++)
@@ -187,7 +193,7 @@ void clear_option(const MENU used_menu, MENU_ITEM option_to_clear)
             }
 }
 
-void clear_menu(MENU menu_to_clear)
+void clear_menu(MENU restrict menu_to_clear)
 {
     for (int i = 0; i < menus_amount; i++)
         if (menus_array[i] == menu_to_clear)
@@ -229,7 +235,7 @@ void clear_menus()
 }
 
 /*
-    RECTRICTED ACCESS
+    RESTRICTED ACCESS
 */
 void _init_menu_system()
 {
@@ -256,7 +262,7 @@ HANDLE _createConsoleScreenBuffer()
            );
 }
 
-void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* text)
+void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text)
 {
     SetConsoleCursorPosition(hDestination, (COORD)
     {
@@ -265,19 +271,21 @@ void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* text)
     _lwrite_string(hDestination, text);
 }
 
-void _draw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* text, ...)
+void _draw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text, ...)
 {
     va_list args;
     va_start(args, text);
+
     SetConsoleCursorPosition(hDestination, (COORD)
     {
         x, y
     });
+
     _vwrite_string(hDestination, text, args);
     va_end(args);
 }
 
-void _write_string(HANDLE hDestination, const char* text, ...)
+void _write_string(HANDLE hDestination, const char* restrict text, ...)
 {
     va_list args;
     va_start(args, text);
@@ -285,16 +293,18 @@ void _write_string(HANDLE hDestination, const char* text, ...)
     va_end(args);
 }
 
-void _vwrite_string(HANDLE hDestination, const char* text, va_list args)
+void _vwrite_string(HANDLE hDestination, const char* restrict text, va_list args)
 {
     char buffer[BUFFER_CAPACITY];
     vsnprintf(buffer, BUFFER_CAPACITY, text, args);
     _lwrite_string(hDestination, buffer);
 }
 
-void _lwrite_string(HANDLE hDestination, const char* text)
+void _lwrite_string(HANDLE hDestination, const char* restrict text)
 {
-    WriteConsoleA(hDestination, (void*)text, (DWORD)strlen(text), &written, NULL);
+    for (size_t i = 0; text[i] != '\0'; i++) // caution with this one
+        WriteFile(hDestination, &text[i], 1, &written, NULL);
+    //WriteConsoleA(hDestination, (void*)text, (DWORD)strlen(text), &written, NULL);
 }
 
 void _setConsoleActiveScreenBuffer(HANDLE hBufferToActivate)
@@ -378,7 +388,7 @@ int _check_menu(int saved_id)
     return menu_still_exists;
 }
 
-void _show_error_and_wait(const char* message, ...)
+void _show_error_and_wait(const char* restrict message, ...)
 {
     _clear_buffer(_hError);
     _setConsoleActiveScreenBuffer(_hError);
@@ -520,52 +530,54 @@ void _renderMenu(const MENU used_menu)
                                     if (inputRecords[event].Event.KeyEvent.bKeyDown)
                                         {
                                             vk = inputRecords[event].Event.KeyEvent.wVirtualKeyCode;
-                                            used_menu->need_redraw = 1;
                                             is_native_key = (vk == VK_UP) || (vk == VK_DOWN) || (vk == VK_RETURN) || (vk == VK_ESCAPE) || (vk == VK_DELETE);
                                             if (is_native_key)
-                                                switch (vk)
-                                                    {
-                                                        case VK_UP:
-                                                            used_menu->selected_index =
-                                                                (used_menu->selected_index - 1 + used_menu->count) % used_menu->count;
-                                                            break;
+                                                {
+                                                    used_menu->need_redraw = 1;
+                                                    switch (vk)
+                                                        {
+                                                            case VK_UP:
+                                                                used_menu->selected_index =
+                                                                    (used_menu->selected_index - 1 + used_menu->count) % used_menu->count;
+                                                                break;
 
-                                                        case VK_DOWN:
-                                                            used_menu->selected_index =
-                                                                (used_menu->selected_index + 1) % used_menu->count;
-                                                            break;
+                                                            case VK_DOWN:
+                                                                used_menu->selected_index =
+                                                                    (used_menu->selected_index + 1) % used_menu->count;
+                                                                break;
 
-                                                        case VK_RETURN: // ENTER
-                                                            if (used_menu->options[used_menu->selected_index]->callback)
-                                                                {
-                                                                    _clear_buffer(hConsole);
-                                                                    _setConsoleActiveScreenBuffer(hConsole);
-                                                                    SetConsoleMode(hStdin, old_mode);
+                                                            case VK_RETURN: // ENTER
+                                                                if (used_menu->options[used_menu->selected_index]->callback)
+                                                                    {
+                                                                        _clear_buffer(hConsole);
+                                                                        _setConsoleActiveScreenBuffer(hConsole);
+                                                                        SetConsoleMode(hStdin, old_mode);
 
-                                                                    used_menu->options[used_menu->selected_index]->callback((void*)used_menu);
+                                                                        used_menu->options[used_menu->selected_index]->callback((void*)used_menu);
 
-                                                                    if (_check_menu(saved_id))
-                                                                        {
-                                                                            if (_size_check(used_menu, FALSE, 0)) exit(1);
-                                                                            else
-                                                                                {
-                                                                                    _setConsoleActiveScreenBuffer(hBackBuffer);
-                                                                                    _block_input(&old_mode);
-                                                                                    used_menu->need_redraw = 1;
-                                                                                }
-                                                                        }
-                                                                    else goto end_render_loop;
-                                                                }
-                                                            break;
+                                                                        if (_check_menu(saved_id))
+                                                                            {
+                                                                                if (_size_check(used_menu, FALSE, 0)) exit(1);
+                                                                                else
+                                                                                    {
+                                                                                        _setConsoleActiveScreenBuffer(hBackBuffer);
+                                                                                        _block_input(&old_mode);
+                                                                                        used_menu->need_redraw = 1;
+                                                                                    }
+                                                                            }
+                                                                        else goto end_render_loop;
+                                                                    }
+                                                                break;
 
-                                                        case VK_ESCAPE:
-                                                            clear_menu(used_menu);
-                                                            break;
-                                                        case VK_DELETE:
-                                                            if (DEBUG)
-                                                                clear_option(used_menu, used_menu->options[used_menu->selected_index]);
-                                                            break;
-                                                    }
+                                                            case VK_ESCAPE:
+                                                                clear_menu(used_menu);
+                                                                break;
+                                                            case VK_DELETE:
+                                                                if (DEBUG)
+                                                                    clear_option(used_menu, used_menu->options[used_menu->selected_index]);
+                                                                break;
+                                                        }
+                                                }
                                         }
                                     break;
                             }
