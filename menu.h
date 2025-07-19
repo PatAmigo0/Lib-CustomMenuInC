@@ -12,13 +12,9 @@
 
 typedef void (*menu_callback)(void* m);
 
-typedef struct menu_item 
-{
-    const char* text;
-    menu_callback callback;
-} menu_item;
+struct __menu_item;
 
-typedef menu_item* MENU_ITEM; 
+typedef struct __menu_item* MENU_ITEM; 
 
 typedef struct __menu 
 {
@@ -45,14 +41,14 @@ typedef __menu* MENU;
 // function prototypes
 double tick();
 MENU create_menu();
-MENU_ITEM create_menu_item(const char* text, menu_callback callback);
-int add_option(const MENU used_menu, const MENU_ITEM item);
-void change_header(const MENU used_menu, const char* text);
-void change_footer(const MENU used_menu, const char* text);
-void enable_menu(const MENU used_menu);
-void clear_option(const MENU used_menu, MENU_ITEM option_to_clear);
-void change_menu_policy(const MENU menu_to_change, int new_header_policy, int new_footer_policy);
-void clear_menu(MENU menu_to_clear);
+MENU_ITEM create_menu_item(const char* restrict text, menu_callback callback);
+int add_option(MENU restrict used_menu, const MENU_ITEM restrict item);
+void change_header(MENU restrict used_menu, const char* restrict text);
+void change_footer(MENU restrict used_menu, const char* restrict text);
+void enable_menu(MENU restrict used_menu);
+void clear_option(MENU restrict used_menu, MENU_ITEM restrict option_to_clear);
+void change_menu_policy(MENU restrict menu_to_change, int new_header_policy, int new_footer_policy);
+void clear_menu(MENU restrict menu_to_clear);
 void clear_menus();
 
 #endif
