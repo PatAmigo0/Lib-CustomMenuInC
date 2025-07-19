@@ -13,30 +13,10 @@
 typedef void (*menu_callback)(void* m);
 
 struct __menu_item;
+struct __menu;
 
 typedef struct __menu_item* MENU_ITEM; 
-
-typedef struct __menu 
-{
-	int __ID;
-    int count;
-    MENU_ITEM* options;
-    int running;
-    int need_redraw;
-    int active_buffer;
-    HANDLE hBuffer[2];
-    int selected_index;
-    
-    int footer_policy;
-    int header_policy;
-    
-    const char* footer;
-    const char* header;
-    
-    COORD menu_size;
-} __menu;
-
-typedef __menu* MENU;
+typedef struct __menu* MENU;
 
 // function prototypes
 double tick();
@@ -48,7 +28,9 @@ void change_footer(MENU restrict used_menu, const char* restrict text);
 void enable_menu(MENU restrict used_menu);
 void clear_option(MENU restrict used_menu, MENU_ITEM restrict option_to_clear);
 void change_menu_policy(MENU restrict menu_to_change, int new_header_policy, int new_footer_policy);
+void change_width_policy(MENU restrict menu_to_change, int new_width_policy);
 void clear_menu(MENU restrict menu_to_clear);
 void clear_menus();
+void clear_menus_and_exit();
 
 #endif

@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <string.h>
 #include <stdarg.h>
+#include <time.h>
 #include "menu.h"
 
 #define DEBUG 0
@@ -43,6 +44,27 @@ struct __menu_item
     menu_callback callback;
 }; // protecting menu_item
 
+struct __menu
+{
+	unsigned long long __ID;
+    int count;
+    MENU_ITEM* options;
+    int running;
+    int need_redraw;
+    int active_buffer;
+    int width_policy;
+    HANDLE hBuffer[2];
+    int selected_index;
+    
+    int footer_policy;
+    int header_policy;
+    
+    const char* footer;
+    const char* header;
+    
+    COORD menu_size;
+}; // protecting menu
+
 // restricted functions prototypes
 void _init_menu_system();
 void _init_hError();
@@ -57,7 +79,7 @@ void _getMenuSize(MENU menu);
 BYTE _size_check(MENU menu, BYTE show_error, int extra_value);
 void _initWindow(SMALL_RECT* window, COORD size);
 void _clear_buffer(HANDLE hBuffer);
-int _check_menu(int saved_id);
+int _check_menu(unsigned long long saved_id);
 HANDLE _block_input(DWORD* oldMode);
 void _renderMenu(const MENU used_menu);
 void _show_error_and_wait(const char* restrict message, ...);
@@ -73,8 +95,13 @@ double tick()
 
 void change_menu_policy(MENU restrict menu_to_change, int new_header_policy, int new_footer_policy)
 {
-    menu_to_change->header_policy = new_header_policy;
-    menu_to_change->footer_policy = new_footer_policy;
+    menu_to_change->header_policy = (new_header_policy && 1) || 0;
+    menu_to_change->footer_policy = (new_footer_policy && 1) || 0;
+}
+
+void change_width_policy(MENU restrict menu_to_change, int new_width_policy)
+{
+	menu_to_change->width_policy = (new_width_policy && 1) || 0;
 }
 
 MENU create_menu()
@@ -85,7 +112,7 @@ MENU create_menu()
             _init_menu_system();
             _initialized = 1;
         }
-    MENU new_menu = (MENU)malloc(sizeof(__menu));
+    MENU new_menu = (MENU)malloc(sizeof(struct __menu));
 
     new_menu->count = 0;
     new_menu->options = NULL;
@@ -94,7 +121,8 @@ MENU create_menu()
     new_menu->selected_index = 0;
     new_menu->footer_policy = 1;
     new_menu->header_policy = 1;
-    new_menu->__ID = menus_amount;
+    new_menu->width_policy = 1;
+    new_menu->__ID = rand() * rand() + menus_amount + 1;
 
     new_menu->hBuffer[0] = _createConsoleScreenBuffer();
     new_menu->hBuffer[1] = _createConsoleScreenBuffer();
@@ -211,7 +239,7 @@ void clear_menu(MENU restrict menu_to_clear)
                     }
                 if (m->hBuffer[0] != INVALID_HANDLE_VALUE) CloseHandle(m->hBuffer[0]);
                 if (m->hBuffer[1] != INVALID_HANDLE_VALUE) CloseHandle(m->hBuffer[1]);
-                m->running = 0;
+                m->running = FALSE;
 
                 menus_array[i] = NULL;
 
@@ -223,7 +251,11 @@ void clear_menu(MENU restrict menu_to_clear)
                         menus_array = NULL;
                         _setConsoleActiveScreenBuffer(hConsole);
                     }
-                else menus_array = (MENU*)realloc(menus_array, menus_amount * sizeof(MENU));
+                else
+				{
+                	menus_array = (MENU*)realloc(menus_array, menus_amount * sizeof(MENU));
+					menus_array[0]->running = TRUE;	// in case so we always have something to hold our back
+				}
                 break;
             }
 }
@@ -231,7 +263,12 @@ void clear_menu(MENU restrict menu_to_clear)
 void clear_menus()
 {
     while(menus_amount > 0) clear_menu(menus_array[0]);
-    exit(0);
+}
+
+void clear_menus_and_exit()
+{
+	while(menus_amount > 0) clear_menu(menus_array[0]);
+	exit(0);
 }
 
 /*
@@ -244,6 +281,7 @@ void _init_menu_system()
     hCurrent = hConsole;
     zero_point = saved_buffer_size = bufferSize = (COORD) {0, 0},
     _init_hError();
+    srand(time(NULL));
 }
 
 void _init_hError()
@@ -302,9 +340,7 @@ void _vwrite_string(HANDLE hDestination, const char* restrict text, va_list args
 
 void _lwrite_string(HANDLE hDestination, const char* restrict text)
 {
-    for (size_t i = 0; text[i] != '\0'; i++) // caution with this one
-        WriteFile(hDestination, &text[i], 1, &written, NULL);
-    //WriteConsoleA(hDestination, (void*)text, (DWORD)strlen(text), &written, NULL);
+    WriteConsoleA(hDestination, (const void*)text, (DWORD)strlen(text), &written, NULL);
 }
 
 void _setConsoleActiveScreenBuffer(HANDLE hBufferToActivate)
@@ -315,14 +351,14 @@ void _setConsoleActiveScreenBuffer(HANDLE hBufferToActivate)
 
 void _getMenuSize(MENU menu)
 {
-    int max_width = 0, current_width;
+    int max_width = 1, current_width;
     for (int i = 0; i < menu->count; i++)
         {
             current_width = strlen(menu->options[i]->text);
             if (current_width > max_width) max_width = current_width;
         }
 
-    menu->menu_size.X = (max_width + 4) * 2;
+    menu->menu_size.X = (max_width + 4) * ((menu->width_policy) ? 2 : 1);
     menu->menu_size.Y = menu->count * 2 + 6;
 }
 
@@ -344,6 +380,13 @@ void _initWindow(SMALL_RECT* window, COORD size)
     window->Top = window->Left = 0;
     window->Right = size.X - 1;
     window->Bottom = size.Y - 1;
+}
+
+HANDLE _find_first_active_menu_buffer()
+{
+	for (int i = menus_amount - 1; i >= 0; i--)
+		if (menus_array[i]->running) return menus_array[i]->hBuffer[menus_array[i]->active_buffer]; // returns current active hBuffer
+	exit(1); // we should NEVER get here
 }
 
 void _clear_buffer(HANDLE hBuffer)
@@ -375,11 +418,11 @@ HANDLE _block_input(DWORD* oldMode)
     return hStdin;
 }
 
-int _check_menu(int saved_id)
+int _check_menu(unsigned long long saved_id)
 {
     int menu_still_exists = 0;
     for (int i = 0; i < menus_amount; i++)
-        if (menus_array[i] && menus_array[i]->__ID == saved_id)
+        if (menus_array[i] && menus_array[i]->__ID == saved_id && menus_array[i]->running == TRUE)
             {
                 menu_still_exists = 1;
                 break;
@@ -402,17 +445,13 @@ void _show_error_and_wait(const char* restrict message, ...)
     _clear_buffer(_hError);
 }
 
-void _process_input()
-{
-
-}
-
 void _renderMenu(const MENU used_menu)
 {
     if (!used_menu) return;
-    int current_width, current_height, old_width, old_height;
+    register int current_width, current_height, old_width, old_height;
     int start_x, start_y;
-    int y, x, i, saved_id;
+    int y, x, i;
+	unsigned long long saved_id;
 
     BYTE size_check = 0, size_error = 0;
 
@@ -489,7 +528,8 @@ void _renderMenu(const MENU used_menu)
                 {
                     hBackBuffer = used_menu->hBuffer[used_menu->active_buffer ^ 1];
                     _clear_buffer(hBackBuffer);
-
+					_draw_at_position(hBackBuffer, 0, 0, "__ID: %llu", used_menu->__ID);
+					
                     start_x = (current_width - menu_size.X) / 2;
                     start_y = (current_height - menu_size.Y) / 2;
 
@@ -588,7 +628,12 @@ void _renderMenu(const MENU used_menu)
 end_render_loop:; // anchor
 
     // cleanup
-    SetConsoleMode(hStdin, old_mode);
-    _setConsoleActiveScreenBuffer(hConsole);
+    if (menus_amount == 0)
+    {
+    	SetConsoleMode(hStdin, old_mode);
+    	_setConsoleActiveScreenBuffer(hConsole);	
+	}
+	else
+		_setConsoleActiveScreenBuffer(_find_first_active_menu_buffer());
     free(used_menu);
 }
