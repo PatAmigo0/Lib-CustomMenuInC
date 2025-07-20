@@ -60,7 +60,7 @@ struct __menu
     int header_policy;
 
     const char* footer;
-    const char* header;
+    const char* header;//пльракдщльеищдаеь
 
     COORD menu_size;
 }; // protecting menu
