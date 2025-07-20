@@ -60,7 +60,7 @@ struct __menu
     int header_policy;
 
     const char* footer;
-    const char* header;//пльракдщльеищдаеь
+    const char* header;
 
     COORD menu_size;
 }; // protecting menu
@@ -189,7 +189,7 @@ MENU_ITEM create_menu_item(const char* restrict text, menu_callback callback)
     return item;
 }
 
-int add_option(MENU used_menu, const MENU_ITEM item)
+int add_option(MENU used_menu, const MENU_ITEM restrict item)
 {
     if (!used_menu) return 0;
 
