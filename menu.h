@@ -10,7 +10,7 @@
 #define ERROR_COLOR    "\033[1;31m"  // red
 #define GREEN_COLOR    "\033[1;32m"
 
-typedef void (*menu_callback)(void* m);
+typedef void (*menu_callback)(void*, void*);
 
 struct __menu_item;
 struct __menu;
@@ -29,7 +29,7 @@ int get_menu_header_policy(MENU menu);
 int get_menu_footer_policy(MENU menu);
 int get_menu_width_policy(MENU menu);
 MENU create_menu();
-MENU_ITEM create_menu_item(const char* restrict text, menu_callback callback);
+MENU_ITEM create_menu_item(const char* restrict text, menu_callback callback, void* callback_data);
 int add_option(MENU used_menu, const MENU_ITEM item);
 void change_header(MENU used_menu, const char* restrict text);
 void change_footer(MENU used_menu, const char* restrict text);
