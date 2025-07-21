@@ -44,6 +44,7 @@ struct __menu_item
 {
     const char* text;
     menu_callback callback;
+    void* data_chunk;
 }; // protecting menu_item
 
 struct __menu
@@ -70,25 +71,26 @@ struct __menu
 }; // protecting menu
 
 // restricted functions prototypes
-unsigned long long _random_uint64_t();
-void _init_menu_system();
-void _init_hError();
-HANDLE _createConsoleScreenBuffer(void);
-void _draw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text, ...);
-void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text);
-void _write_string(HANDLE hDestination, const char* restrict text, ...);
-void _vwrite_string(HANDLE hDestination, const char* restrict text, va_list args);
-void _lwrite_string(HANDLE hDestination, const char* restrict text);
-void _setConsoleActiveScreenBuffer(HANDLE hBufferToActivate);
-void _getMenuSize(MENU menu);
-BYTE _size_check(MENU menu, BYTE show_error, int extra_value);
-void _initWindow(SMALL_RECT* restrict window, COORD size);
-void _clear_buffer(HANDLE hBuffer);
-int _check_menu(unsigned long long saved_id);
-void _block_input(DWORD* oldMode);
-void _renderMenu(const MENU used_menu);
-void _show_error_and_wait(const char* restrict message, ...);
-void _show_error_and_wait_extended(MENU menu, COORD newSize);
+static unsigned long long _random_uint64_t();
+static void _init_menu_system();
+static void _init_hError();
+static HANDLE _createConsoleScreenBuffer(void);
+static void _draw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text, ...);
+static void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text);
+static void _write_string(HANDLE hDestination, const char* restrict text, ...);
+static void _vwrite_string(HANDLE hDestination, const char* restrict text, va_list args);
+static void _lwrite_string(HANDLE hDestination, const char* restrict text);
+static void _setConsoleActiveScreenBuffer(HANDLE hBufferToActivate);
+static void _getMenuSize(MENU menu);
+static BYTE _size_check(MENU menu, BYTE show_error, int extra_value);
+static void _initWindow(SMALL_RECT* restrict window, COORD size);
+static void _clear_buffer(HANDLE hBuffer);
+static int _check_menu(unsigned long long saved_id);
+static void _block_input(DWORD* oldMode);
+static void _renderMenu(const MENU used_menu);
+static void _show_error_and_wait(const char* restrict message, ...);
+static void _show_error_and_wait_extended(MENU menu, COORD newSize);
+static HANDLE _find_first_active_menu_buffer();  // Add this declaration if missing
 
 double tick()
 {
@@ -147,12 +149,13 @@ MENU create_menu()
     return new_menu;
 }
 
-MENU_ITEM create_menu_item(const char* restrict text, menu_callback callback)
+MENU_ITEM create_menu_item(const char* restrict text, menu_callback callback, void* callback_data)
 {
     MENU_ITEM item = (MENU_ITEM)malloc(sizeof(struct __menu_item));
     if (!item) return NULL;
-    item->text = (text != NULL) ? strdup(text) : strdup(DEFAULT_MENU_TEXT);
-    item->callback = (callback != NULL) ? callback : NULL;
+    item->text = (text != NULL) ? text : DEFAULT_MENU_TEXT;
+    item->callback = callback;
+    item->data_chunk = callback_data;
     return item;
 }
 
@@ -209,7 +212,6 @@ void clear_option(MENU used_menu, MENU_ITEM option_to_clear)
     for (int i = 0; i < used_menu->count; i++)
         if (o[i] == option_to_clear)
             {
-                free((void*)o[i]->text);
                 free(o[i]);
                 for (int k = i + 1; k < used_menu->count; k++)
                     o[k-1] = o[k];
@@ -237,10 +239,7 @@ void clear_menu(MENU menu_to_clear)
                 if (m->options != NULL && m->count > 0)
                     {
                         for (int j = 0; j < m->count; j++)
-                            {
-                                free((void*)m->options[j]->text);
                                 free(m->options[j]);
-                            }
                         free(m->options);
                         m->options = NULL;
                     }
@@ -286,7 +285,7 @@ unsigned long long _random_uint64_t()
     return ((unsigned long long)rand() << 32) | rand();
 }
 
-void _init_menu_system()
+static void _init_menu_system()
 {
     hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     hConsoleError = GetStdHandle(STD_ERROR_HANDLE);
@@ -297,12 +296,12 @@ void _init_menu_system()
     srand(time(NULL));
 }
 
-void _init_hError()
+static void _init_hError()
 {
     _hError = _createConsoleScreenBuffer();
 }
 
-HANDLE _createConsoleScreenBuffer()
+static HANDLE _createConsoleScreenBuffer()
 {
     return CreateConsoleScreenBuffer(
                GENERIC_READ | GENERIC_WRITE,
@@ -313,7 +312,7 @@ HANDLE _createConsoleScreenBuffer()
            );
 }
 
-void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text)
+static void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text)
 {
     SetConsoleCursorPosition(hDestination, (COORD)
     {
@@ -322,7 +321,7 @@ void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restr
     _lwrite_string(hDestination, text);
 }
 
-void _draw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text, ...)
+static void _draw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text, ...)
 {
     va_list args;
     va_start(args, text);
@@ -336,7 +335,7 @@ void _draw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restri
     va_end(args);
 }
 
-void _write_string(HANDLE hDestination, const char* restrict text, ...)
+static void _write_string(HANDLE hDestination, const char* restrict text, ...)
 {
     va_list args;
     va_start(args, text);
@@ -344,25 +343,25 @@ void _write_string(HANDLE hDestination, const char* restrict text, ...)
     va_end(args);
 }
 
-void _vwrite_string(HANDLE hDestination, const char* restrict text, va_list args)
+static void _vwrite_string(HANDLE hDestination, const char* restrict text, va_list args)
 {
     char buffer[BUFFER_CAPACITY];
     vsnprintf(buffer, BUFFER_CAPACITY, text, args);
     _lwrite_string(hDestination, buffer);
 }
 
-void _lwrite_string(HANDLE hDestination, const char* restrict text)
+static void _lwrite_string(HANDLE hDestination, const char* restrict text)
 {
     WriteConsoleA(hDestination, (const void*)text, (DWORD)strlen(text), &written, NULL);
 }
 
-void _setConsoleActiveScreenBuffer(HANDLE hBufferToActivate)
+static void _setConsoleActiveScreenBuffer(HANDLE hBufferToActivate)
 {
     SetConsoleActiveScreenBuffer(hBufferToActivate);
     hCurrent = hBufferToActivate;
 }
 
-void _getMenuSize(MENU menu)
+static void _getMenuSize(MENU menu)
 {
     int max_width = 1, current_width;
     for (int i = 0; i < menu->count; i++)
@@ -375,7 +374,7 @@ void _getMenuSize(MENU menu)
     menu->menu_size.Y = menu->count * 2 + 6;
 }
 
-BYTE _size_check(MENU menu, BYTE show_error, int extra_value)
+static BYTE _size_check(MENU menu, BYTE show_error, int extra_value)
 {
     GetConsoleScreenBufferInfo(hCurrent, &hBack_csbi);
     int screen_width = hBack_csbi.srWindow.Right - hBack_csbi.srWindow.Left + 1;
@@ -392,21 +391,21 @@ BYTE _size_check(MENU menu, BYTE show_error, int extra_value)
 
 }
 
-void _initWindow(SMALL_RECT* restrict window, COORD size)
+static void _initWindow(SMALL_RECT* restrict window, COORD size)
 {
     window->Top = window->Left = 0;
     window->Right = size.X - 1;
     window->Bottom = size.Y - 1;
 }
 
-HANDLE _find_first_active_menu_buffer()
+static HANDLE _find_first_active_menu_buffer()
 {
     for (int i = menus_amount - 1; i >= 0; i--)
         if (menus_array[i]->running) return menus_array[i]->hBuffer[menus_array[i]->active_buffer]; // returns current active hBuffer
-    exit(1); // we should NEVER get here
+    exit(1); // we should NEVER get there
 }
 
-void _clear_buffer(HANDLE hBuffer)
+static void _clear_buffer(HANDLE hBuffer)
 {
     SetConsoleCursorPosition(hBuffer, zero_point);
     if (GetConsoleScreenBufferInfo(hBuffer, &hBack_csbi))
@@ -422,16 +421,15 @@ void _clear_buffer(HANDLE hBuffer)
         }
 }
 
-void _block_input(DWORD* oldMode)
+static void _block_input(DWORD* oldMode)
 {
-
     GetConsoleMode(hStdin, oldMode);
     DWORD newMode = *oldMode & ~ENABLE_QUICK_EDIT_MODE;
     newMode |= ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT;
     SetConsoleMode(hStdin, newMode);
 }
 
-int _check_menu(unsigned long long saved_id)
+static int _check_menu(unsigned long long saved_id)
 {
     int menu_still_exists = 0;
     for (int i = 0; i < menus_amount; i++)
@@ -444,7 +442,7 @@ int _check_menu(unsigned long long saved_id)
     return menu_still_exists;
 }
 
-void _show_error_and_wait(const char* restrict message, ...)
+static void _show_error_and_wait(const char* restrict message, ...)
 {
     _clear_buffer(_hError);
     _setConsoleActiveScreenBuffer(_hError);
@@ -458,7 +456,7 @@ void _show_error_and_wait(const char* restrict message, ...)
     _clear_buffer(_hError);
 }
 
-void _show_error_and_wait_extended(MENU menu, COORD newSize)
+static void _show_error_and_wait_extended(MENU menu, COORD newSize)
 {
     COORD menu_size = menu->menu_size;
     SetConsoleScreenBufferSize(_hError, newSize);
@@ -495,14 +493,14 @@ void _show_error_and_wait_extended(MENU menu, COORD newSize)
     return;
 }
 
-void _renderMenu(const MENU used_menu)
+static void _renderMenu(const MENU used_menu)
 {
     if (!used_menu) return;
     COORD current_size, old_size, start;
     int y, x, i;
     unsigned long long saved_id;
 
-    BYTE size_check = 0, size_error = 0;
+    BYTE size_check = 0;
 
     HANDLE hBackBuffer = used_menu->hBuffer[0];
     CONSOLE_SCREEN_BUFFER_INFO active_csbi, csbi;
@@ -625,13 +623,14 @@ void _renderMenu(const MENU used_menu)
                                                                 break;
 
                                                             case VK_RETURN: // ENTER
-                                                                if (used_menu->options[used_menu->selected_index]->callback)
+                                                                if (used_menu->options[used_menu->selected_index]->callback && used_menu->options[used_menu->selected_index]->callback != NULL)
                                                                     {
                                                                         _clear_buffer(hConsole);
                                                                         _setConsoleActiveScreenBuffer(hConsole);
                                                                         SetConsoleMode(hStdin, old_mode);
-
-                                                                        used_menu->options[used_menu->selected_index]->callback((void*)used_menu);
+																		
+																		MENU_ITEM current_option = used_menu->options[used_menu->selected_index];
+                                                                        current_option->callback((void*)used_menu, current_option->data_chunk);
 
                                                                         if (_check_menu(saved_id))
                                                                             {
