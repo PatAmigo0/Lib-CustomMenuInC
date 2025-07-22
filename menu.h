@@ -1,7 +1,37 @@
-#ifndef MENU_H
-#define MENU_H
+#ifndef _MENU_H_
+#define _MENU_H_
 
+/* defines */
+#ifndef _STDIO_H_
+#include <stdio.h>
+#endif
+
+#ifndef _STDLIB_H_
+#include <stdlib.h>
+#endif
+
+#ifndef _WINDOWS_H_
 #include <windows.h>
+#endif
+
+#ifndef _STRING_H_
+#include <string.h>
+#endif
+
+#ifndef _STDARG_H_
+#include <stdarg.h>
+#endif
+
+#ifndef _TIME_H_
+#include <time.h>
+#endif
+
+//#ifndef _LIMITS_H_
+//#include <limits.h>
+//#endif
+
+/* end */
+
 #define RESET      "\033[0m"
 #define HEADER     "\033[44m\033[37m" // dark blue
 #define SUBHEADER  "\033[46m\033[30m" // light blue
