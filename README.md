@@ -3,7 +3,7 @@
 This lightweight library provides a simple, easy-to-use menu system for Windows console applications. It features light customizable menu, keyboard navigation, and a clean abstraction layer.
 
 ## Version
-```0.8.7 BETA```
+```0.8.8```
 
 ## Features
 
@@ -15,6 +15,7 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 - Callback functions for menu selections
 - Dynamically changes the size and location of the menu in the center of the console
 - **Memory-safe menu item creation** with `create_menu_item()`
+- Easy to use!
 
 ## Installation
 
@@ -37,7 +38,7 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 ```c
 #include "menu.h"
 
-void menu_callback_example(void* unused)
+void menu_callback_example(void* unused, void* data_block)
 {
     printf("Option selected!\n");
 }
@@ -47,8 +48,8 @@ int main()
     MENU main_menu = create_menu();
     
     // create menu items using create_menu_item
-    add_option(main_menu, create_menu_item("Option 1", menu_callback_example));
-    add_option(main_menu, create_menu_item("Option 2", menu_callback_example));
+    add_option(main_menu, create_menu_item("Option 1", menu_callback_example, NULL));
+    add_option(main_menu, create_menu_item("Option 2", menu_callback_example, NULL));
     
     change_header(main_menu, "MAIN MENU");
     change_footer(main_menu, "Navigate with arrow keys");
@@ -62,26 +63,27 @@ int main()
 1. **`MENU create_menu()`**  
    Creates and returns a new menu object.
 
-2. **`MENU_ITEM create_menu_item(const char* text, void (*callback)(void*))`**  
+2. **`MENU_ITEM create_menu_item(const char* restrict text, void (*callback)(void*, void*), void* data_to_send)`**  
    Creates a menu item with text and callback function.  
    *This is the recommended way to create menu items*.
 
-3. **`int add_option(MENU your_menu, menu_item* your_item)`**  
+3. **`int add_option(MENU your_menu, menu_item* restrict your_item)`**  
    Adds an option to your menu.  
    - `menu_item` struct:
      ```c
      typedef struct
      {
          char* text;                   // display text
-         void (*callback)(void* menu); // function to call when selected
+         void (*callback)(void* menu, void* data_block); // function to call when selected
+         void* data_chunk; // your value for transmission in the callback
      } menu_item;
      // MENU_ITEM is the pointer version of menu_item, menu_item shouldn't be used.
      ```
 
-4. **`void change_header(MENU your_menu, const char* text)`**  
+4. **`void change_header(MENU your_menu, const char* restrict text)`**  
    Sets the menu header text.
 
-5. **`void change_footer(MENU your_menu, const char* text)`**  
+5. **`void change_footer(MENU your_menu, const char* restrict text)`**  
    Sets the menu footer text.
 
 6. **`void enable_menu(MENU your_menu)`**  
@@ -100,7 +102,7 @@ int main()
 
 Use `create_menu_item()` for memory-safe menu item creation:
 ```c
-MENU_ITEM item = create_menu_item("Click Me", my_callback);
+MENU_ITEM item = create_menu_item("Click Me", my_callback, NULL);
 
 // add to menu:
 add_option(my_menu, item);
@@ -171,10 +173,10 @@ int main()
     MENU main_menu = create_menu();
     
     // create menu items with create_menu_item
-    add_option(main_menu, create_menu_item("Open File", file_action));
-    add_option(main_menu, create_menu_item("Save File", file_action));
-    add_option(main_menu, create_menu_item("Edit Content", edit_action));
-    add_option(main_menu, create_menu_item("Exit Program", exit_action));
+    add_option(main_menu, create_menu_item("Open File", file_action, NULL));
+    add_option(main_menu, create_menu_item("Save File", file_action, NULL));
+    add_option(main_menu, create_menu_item("Edit Content", edit_action, NULL));
+    add_option(main_menu, create_menu_item("Exit Program", exit_action, NULL));
     
     change_header(main_menu, "TEXT EDITOR V2.4");
     change_footer(main_menu, "Use ↑↓ to navigate, Enter to select, Esc to exit");
@@ -190,9 +192,9 @@ int main()
 
 ## Key Updates
 
-- Version 0.8.6 BETA -> 0.8.7 BETA
+- Version 0.8.7 BETA -> 0.8.8
 - **`create_menu_item()` is now the recommended way** to create menu items (be careful of memory leaks if you don't use this)
-- All callbacks should have a `void*` parameter (can be NULL if unused)
+- You can pass any value to your callback via void pointer to the data_block
 - Memory management is handled automatically for menu items
 - Provides better type safety and error prevention
 
@@ -208,4 +210,4 @@ int main()
 
 Contributions are welcome! Please submit pull requests or open issues on GitHub.
 
-> **Note**: Always use `create_menu_item()` for creating menu items to ensure proper memory management and compatibility.
+> **Note**: Never make a pointer to the MENU_ITEM which was created via ```create_menu_item()``` (RESTRICTED PARAM).
