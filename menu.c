@@ -1,11 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <malloc.h>
-#include <windows.h>
-#include <string.h>
-#include <stdarg.h>
-#include <time.h>
-#include <limits.h>
 #include "menu.h"
 
 #define DEBUG 0
@@ -471,6 +463,8 @@ static void _show_error_and_wait_extended(MENU menu, COORD newSize)
     BYTE running = 1;
     while (running)
         {
+			Sleep(UPDATE_FREQUENCE);
+			
             GetConsoleScreenBufferInfo(_hError, &hBack_csbi);
             cr_window = hBack_csbi.srWindow;
             current_size = (COORD)
@@ -484,7 +478,6 @@ static void _show_error_and_wait_extended(MENU menu, COORD newSize)
                     _clear_buffer(_hError);
                     _draw_at_position(_hError, 0, 0, error_message, menu_size.X, menu_size.Y, current_size.X, current_size.Y);
                 }
-            Sleep(UPDATE_FREQUENCE);
         }
 
     _clear_buffer(_hError);
