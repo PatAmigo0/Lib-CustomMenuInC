@@ -4,7 +4,7 @@
 
 #define BUFFER_CAPACITY 128
 #define UPDATE_FREQUENCE 20 // ms
-#define EVENT_MAX_RECORDS 8
+#define EVENT_MAX_RECORDS 4
 
 #define FIX_VALUE 2
 
@@ -14,15 +14,16 @@
 
 #define LOG_FILE_NAME "menu_log.txt"
 
-static COORD zero_point, saved_buffer_size, bufferSize;
-static DWORD written = 0, saved_size;
+// cached values
+static COORD zero_point = {0, 0};
+static DWORD written = 0, saved_size = 0;
+static COORD cached_size = {0, 0}; // saved screen size after the last _size_check function call
+static HANDLE hConsole, hConsoleError, hCurrent, _hError, hStdin; // cached handlers
+static CONSOLE_SCREEN_BUFFER_INFO hBack_csbi; // cached csbi
+
+// menu values
 static MENU* menus_array = NULL;
 static int menus_amount = 0;
-static COORD cached_size; // saved screen size after the last _size_check function call
-
-static HANDLE hConsole, hConsoleError, hCurrent, _hError, hStdin; // cached handlers
-
-static CONSOLE_SCREEN_BUFFER_INFO hBack_csbi;
 
 const char* error_message =
     ERROR_COLOR
@@ -231,7 +232,7 @@ void clear_menu(MENU menu_to_clear)
                 if (m->options != NULL && m->count > 0)
                     {
                         for (int j = 0; j < m->count; j++)
-                                free(m->options[j]);
+                            free(m->options[j]);
                         free(m->options);
                         m->options = NULL;
                     }
@@ -272,7 +273,7 @@ void clear_menus_and_exit()
 /*
     RESTRICTED ACCESS
 */
-unsigned long long _random_uint64_t()
+static unsigned long long _random_uint64_t()
 {
     return ((unsigned long long)rand() << 32) | rand();
 }
@@ -283,7 +284,6 @@ static void _init_menu_system()
     hConsoleError = GetStdHandle(STD_ERROR_HANDLE);
     hStdin = GetStdHandle(STD_INPUT_HANDLE);
     hCurrent = hConsole;
-    zero_point = saved_buffer_size = bufferSize = (COORD) {0, 0},
     _init_hError();
     srand(time(NULL));
 }
@@ -394,21 +394,27 @@ static HANDLE _find_first_active_menu_buffer()
 {
     for (int i = menus_amount - 1; i >= 0; i--)
         if (menus_array[i]->running) return menus_array[i]->hBuffer[menus_array[i]->active_buffer]; // returns current active hBuffer
-    exit(1); // we should NEVER get there
+    exit(69); // we should NEVER get there
 }
 
 static void _clear_buffer(HANDLE hBuffer)
 {
-    SetConsoleCursorPosition(hBuffer, zero_point);
+	static WORD basic_color = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+	static COORD saved_buffer_size = {-1, -1};
+	static COORD bufferSize;
+	
     if (GetConsoleScreenBufferInfo(hBuffer, &hBack_csbi))
         {
+        	// SetConsoleCursorPosition(hBuffer, zero_point);
             bufferSize = hBack_csbi.dwSize;
             if (saved_buffer_size.X != bufferSize.X || saved_buffer_size.Y != bufferSize.Y)
-                saved_size = bufferSize.X * bufferSize.Y;
+            {
+            	saved_size = bufferSize.X * bufferSize.Y;	
+            	saved_buffer_size = bufferSize;
+			}
 
             FillConsoleOutputCharacter(hBuffer, ' ', saved_size, zero_point, &written);
-            FillConsoleOutputAttribute(hBuffer,
-                                       FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
+            FillConsoleOutputAttribute(hBuffer, basic_color,
                                        saved_size, zero_point, &written);
         }
 }
@@ -463,8 +469,8 @@ static void _show_error_and_wait_extended(MENU menu, COORD newSize)
     BYTE running = 1;
     while (running)
         {
-			Sleep(UPDATE_FREQUENCE);
-			
+            Sleep(UPDATE_FREQUENCE);
+
             GetConsoleScreenBufferInfo(_hError, &hBack_csbi);
             cr_window = hBack_csbi.srWindow;
             current_size = (COORD)
@@ -489,17 +495,19 @@ static void _show_error_and_wait_extended(MENU menu, COORD newSize)
 static void _renderMenu(const MENU used_menu)
 {
     if (!used_menu) return;
-    COORD current_size, old_size, start;
+    register COORD current_size, old_size, start;
     int y, x, i;
     unsigned long long saved_id;
 
-    BYTE size_check = 0;
+    register BYTE size_check = 0;
 
     HANDLE hBackBuffer = used_menu->hBuffer[0];
     CONSOLE_SCREEN_BUFFER_INFO active_csbi, csbi;
-    SMALL_RECT active_window, old_window, new_window;
-    COORD menu_size, newSize;
-    DWORD old_mode, numEvents, event;
+    register SMALL_RECT active_window;
+	SMALL_RECT old_window, new_window;
+    COORD menu_size;
+    DWORD old_mode, event;
+    DWORD numEvents;
     WORD vk;
     INPUT_RECORD inputRecords[EVENT_MAX_RECORDS];
     const char* format;
@@ -547,8 +555,8 @@ static void _renderMenu(const MENU used_menu)
                             continue;
                         }
 
-                    SetConsoleScreenBufferSize(used_menu->hBuffer[0], newSize);
-                    SetConsoleScreenBufferSize(used_menu->hBuffer[1], newSize);
+                    SetConsoleScreenBufferSize(used_menu->hBuffer[0], current_size);
+                    SetConsoleScreenBufferSize(used_menu->hBuffer[1], current_size);
                     SetConsoleWindowInfo(used_menu->hBuffer[0], TRUE, &new_window);
                     SetConsoleWindowInfo(used_menu->hBuffer[1], TRUE, &new_window);
                     used_menu->need_redraw = 1;
@@ -558,10 +566,10 @@ static void _renderMenu(const MENU used_menu)
                 {
                     hBackBuffer = used_menu->hBuffer[used_menu->active_buffer ^ 1];
                     _clear_buffer(hBackBuffer);
-                    _draw_at_position(hBackBuffer, 0, 0, "__ID: %llu", used_menu->__ID);
+                    // _draw_at_position(hBackBuffer, 0, 0, "__ID: %llu", used_menu->__ID);
 
                     start.X = (current_size.X - menu_size.X) / 2;
-                    start.Y = (current_size.Y - menu_size.Y) / 2;
+                    start.Y = (current_size.Y - menu_size.Y) / 2 + 2;
 
                     // header
                     if (used_menu->header_policy)
@@ -588,6 +596,8 @@ static void _renderMenu(const MENU used_menu)
                     used_menu->active_buffer ^= 1;
                     used_menu->need_redraw = 0;
                 }
+
+            // console input checking
             if (GetNumberOfConsoleInputEvents(hStdin, &numEvents) && numEvents > 0)
                 {
                     BYTE is_native_key = 0;
@@ -621,8 +631,8 @@ static void _renderMenu(const MENU used_menu)
                                                                         _clear_buffer(hConsole);
                                                                         _setConsoleActiveScreenBuffer(hConsole);
                                                                         SetConsoleMode(hStdin, old_mode);
-																		
-																		MENU_ITEM current_option = used_menu->options[used_menu->selected_index];
+
+                                                                        MENU_ITEM current_option = used_menu->options[used_menu->selected_index];
                                                                         current_option->callback((void*)used_menu, current_option->data_chunk);
 
                                                                         if (_check_menu(saved_id))
@@ -647,6 +657,7 @@ static void _renderMenu(const MENU used_menu)
                                                                     clear_option(used_menu, used_menu->options[used_menu->selected_index]);
                                                                 break;
                                                         }
+                                                    FlushConsoleInputBuffer(hStdin);
                                                 }
                                         }
                                     break;
@@ -665,7 +676,7 @@ end_render_loop:; // anchor
         }
     else
         _setConsoleActiveScreenBuffer(_find_first_active_menu_buffer());
-    // free(used_menu); no need for now 
+    // free(used_menu); no need for now
 }
 
 /* GETTERS */
