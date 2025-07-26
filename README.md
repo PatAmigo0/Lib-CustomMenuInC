@@ -14,6 +14,7 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 - Double buffering for smooth rendering
 - Callback functions for menu selections
 - Dynamically changes the size and location of the menu in the center of the console
+- Mouse tracking
 - **Memory-safe menu item creation** with `create_menu_item()`
 - Easy to use!
 
@@ -203,7 +204,7 @@ int main()
 - Windows-only implementation
 - Console resize handling has minimum size requirements
 - Limited to vertical menus
-- No mouse support (will be added in future)
+- Mouse support is still in BETA.
 - Some window resizing visual bugs
 
 ## Contributing
