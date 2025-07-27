@@ -1,9 +1,10 @@
+
 # Windows Console Menu Library
 
-This lightweight library provides a simple, easy-to-use menu system for Windows console applications. It features light customizable menu, keyboard navigation, and a clean abstraction layer.
+This lightweight library provides a simple, easy-to-use menu system for Windows console applications. It features customizable menus, keyboard and mouse navigation, and a clean abstraction layer.
 
 ## Version
-```0.9.0 BETA```
+```0.9.1```
 
 ## Features
 
@@ -11,21 +12,22 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 - Customizable headers and footers
 - Colorful menu options with highlighting
 - Keyboard navigation (arrow keys + Enter)
+- Mouse support (toggle on/off)
 - Double buffering for smooth rendering
-- Callback functions for menu selections
-- Dynamically changes the size and location of the menu in the center of the console
-- Mouse tracking
+- Callback functions with data passing
+- Dynamically centers the menu in the console
 - Clear abstraction layer
-- Safe mmemory managment
+- Safe memory management
 - Easy to use!
 
 ## Installation
 
 1. Add `menu.h` and `menu.c` to your project
 2. Include the header in your code:
-   ```c
-   #include "menu.h"
-   ```
+```c
+#include "menu.h"
+```
+
 
 ## Requirements
 
@@ -40,157 +42,176 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 ```c
 #include "menu.h"
 
-void menu_callback_example(MENU menu, dpointer data_block)
+void menu_callback(MENU menu, dpointer data)
 {
-    printf("Option selected!\n");
+    char* message = (char*)data;
+    printf("%s\n", message);
 }
 
 int main()
 {
     MENU main_menu = create_menu();
     
-    // create menu items using create_menu_item
-    add_option(main_menu, create_menu_item("Option 1", menu_callback_example, NULL));
-    add_option(main_menu, create_menu_item("Option 2", menu_callback_example, NULL));
+    // create menu items with associated data
+    add_option(main_menu, create_menu_item("Option 1", menu_callback, "First option selected"));
+    add_option(main_menu, create_menu_item("Option 2", menu_callback, "Second option selected"));
     
     change_header(main_menu, "MAIN MENU");
-    change_footer(main_menu, "Navigate with arrow keys");
+    change_footer(main_menu, "Navigate with arrow keys or mouse");
+    
+    // enable mouse support
+    toggle_mouse(main_menu);
     
     enable_menu(main_menu);
 }
 ```
 
-### Core Functions
+## Core Functions Reference
 
+### Menu Creation & Management
 1. **`MENU create_menu()`**  
    Creates and returns a new menu object.
 
-2. **`MENU_ITEM create_menu_item(const char* restrict text, void (*callback)(MENU, dpointer), dpointer data_to_send)`**  
-   Creates a menu item with text and callback function.  
-   *This is the recommended way to create menu items*.
-
-3. **`int add_option(MENU your_menu, menu_item* restrict your_item)`**  
-   Adds an option to your menu.  
-
-4. **`void change_header(MENU your_menu, const char* restrict text)`**  
-   Sets the menu header text.
-
-5. **`void change_footer(MENU your_menu, const char* restrict text)`**  
-   Sets the menu footer text.
-
-6. **`void enable_menu(MENU your_menu)`**  
+2. **`void enable_menu(MENU menu)`**  
    Activates and displays the menu.
 
-7. **`void change_menu_policy(MENU menu, int header_policy, int footer_policy)`**  
-   Controls header/footer visibility (1 = show, 0 = hide).
-
-8. **`void toggle_mouse(MENU menu)`**
-   Toggles mouse input.
-
-9. **`void clear_menu(MENU menu)`**  
+3. **`void clear_menu(MENU menu)`**  
    Destroys a menu and frees its resources.
 
-10. **`void clear_menus()`**
-   Destroys all the menus that you had in the program, and then shuts down the program.
+4. **`void clear_menus()`**  
+   Destroys all created menus.
 
-### Creating Menu Items
+5. **`void clear_menus_and_exit()`**  
+   Destroys all menus and exits the program.
 
-Use `create_menu_item()` for memory-safe menu item creation:
-```c
-MENU_ITEM item = create_menu_item("Click Me", my_callback, NULL);
+### Menu Item Management
+6. **`MENU_ITEM create_menu_item(const char* text, menu_callback callback, dpointer data)`**  
+   Creates a menu item with text, callback, and associated data.
 
-// add to menu:
-add_option(my_menu, item);
-```
+7. **`int add_option(MENU menu, MENU_ITEM item)`**  
+   Adds a menu item to a menu.
 
-### Advanced Features
+8. **`void clear_option(MENU menu, MENU_ITEM option)`**  
+   Removes a specific option from a menu.
 
-- **Color Customization** (defined in menu.h):
-  ```c
-  #define HEADER     "\033[44m\033[37m" // dark blue
-  #define SUBHEADER  "\033[46m\033[30m" // light blue
-  #define HIGHLIGHT  "\033[47m\033[30m" // inverted (white)
-  #define SUCCESS    "\033[42m\033[37m" // green
-  #define ERROR_COLOR "\033[1;31m"      // red
-  #define RESET      "\033[0m" 
-  ```
+### Appearance Customization
+9. **`void change_header(MENU menu, const char* text)`**  
+   Sets the menu header text.
 
-- **Menu Policies**:
-  ```c
-  // keep header and hide footer:
-  change_menu_policy(my_menu, 1, 0);
-  ```
+10. **`void change_footer(MENU menu, const char* text)`**  
+    Sets the menu footer text.
 
-- **Callback Functions**:
-  ```c
-  void custom_callback(MENU menu)
-  {
-      printf("Selected from menu with %d options\n", get_menu_options_amount(menu));
-      // access menu context if needed
-  }
-  ```
+11. **`void change_menu_policy(MENU menu, int header_policy, int footer_policy)`**  
+    Controls header/footer visibility (1 = show, 0 = hide).
 
-## Building
+12. **`void change_width_policy(MENU menu, int width_policy)`**  
+    Toggles between normal and double-width menu (1 = double width).
 
-Compile with your project if using static lib (example using GCC):
-```bash
-gcc <your_app.c> menu.c -o your_app
-```
+### Input Settings
+13. **`void toggle_mouse(MENU menu)`**  
+    Toggles mouse input support.
 
-## Example Program
+### Configuration
+14. **`void set_new_default_settings(MENU_SETTINGS settings)`**  
+    Sets default settings for new menus.
+
+### Information Getters
+15. **`int get_menu_options_amount(MENU menu)`**  
+    Returns number of options in menu.
+
+16. **`int is_menu_running(MENU menu)`**  
+    Returns 1 if menu is active, 0 otherwise.
+
+17. **`int get_menu_selected_index(MENU menu)`**  
+    Returns currently selected index.
+
+18. **`const char* get_menu_header(MENU menu)`**  
+    Returns current header text.
+
+19. **`const char* get_menu_footer(MENU menu)`**  
+    Returns current footer text.
+
+20. **`int get_menu_header_policy(MENU menu)`**  
+    Returns header visibility status.
+
+21. **`int get_menu_footer_policy(MENU menu)`**  
+    Returns footer visibility status.
+
+22. **`int get_menu_width_policy(MENU menu)`**  
+    Returns width policy status.
+
+## Advanced Example with dpointer
 
 ```c
 #include <stdio.h>
 #include "menu.h"
 
-void file_action(MENU unused)
+// define custom data structure
+typedef struct
 {
-    printf("\nFile action selected!\n");
-    system("pause");
+    int id;
+    const char* name;
+} MenuData;
+
+void file_callback(MENU menu, dpointer data)
+{
+    MenuData* file_data = (MenuData*)data;
+    printf("Selected file option: %s (ID: %d)\n", 
+           file_data->name, file_data->id);
 }
 
-void edit_action(MENU unused)
+void edit_callback(MENU menu, dpointer data)
 {
-    printf("\nEdit action selected!\n");
-    system("pause");
+    int* value = (int*)data;
+    printf("Edit action called with value: %d\n", *value);
 }
 
-void exit_action(MENU menu)
+void exit_callback(MENU menu, dpointer data)
 {
-    printf("\nExiting...\n");
-    clear_menu(menu);
+    printf("Exiting program...\n");
+    clear_menus_and_exit();
 }
 
 int main()
 {
+    // create data for callbacks
+    MenuData open_data = {1, "Open File"};
+    MenuData save_data = {2, "Save File"};
+    int edit_value = 42;
+    
     MENU main_menu = create_menu();
     toggle_mouse(main_menu);
 
-    // create menu items with create_menu_item
-    add_option(main_menu, create_menu_item("Open File", file_action, NULL));
-    add_option(main_menu, create_menu_item("Save File", file_action, NULL));
-    add_option(main_menu, create_menu_item("Edit Content", edit_action, NULL));
-    add_option(main_menu, create_menu_item("Exit Program", exit_action, NULL));
+    // create menu items with different data types
+    add_option(main_menu, create_menu_item("Open", file_callback, &open_data));
+    add_option(main_menu, create_menu_item("Save", file_callback, &save_data));
+    add_option(main_menu, create_menu_item("Edit", edit_callback, &edit_value));
+    add_option(main_menu, create_menu_item("Exit", exit_callback, NULL));
     
-    change_header(main_menu, "TEXT EDITOR V2.4");
-    change_footer(main_menu, "Use ↑↓ to navigate, Enter to select, Esc to exit");
+    change_header(main_menu, "ADVANCED EXAMPLE");
+    change_footer(main_menu, "Pass different data types to callbacks");
+    
+    // hide footer
+    change_menu_policy(main_menu, 1, 0);
     
     enable_menu(main_menu);
-    
     return 0;
 }
 ```
 
-## Graphical example
-<img width="3600" height="3399" alt="how menu works" src="https://github.com/user-attachments/assets/11fe3e66-bf14-4ddf-b7c7-992e154b651b" />
+## Building
+
+Compile with your project:
+```bash
+gcc <your_app.c> menu.c -o your_app
+```
 
 ## Key Updates
 
-- Version 0.8.8 -> 0.9.0 BETA
-- Mouse support
-- You can pass any value to your callback via void pointer (dpointer) to the data_block
-- More efficent memory management
-- Provides better type safety and error prevention
+- Version 0.9.0 BETA → 0.9.1
+- Less recources consume
+- Program works 20x faster and smoother
+- A lot of bugs were fixed
 
 ## Limitations
 
@@ -199,10 +220,10 @@ int main()
 - Limited to vertical menus
 - Some window resizing visual bugs
 
-  `All this is going to be added in the future.`
+*Planned for future versions: Horizontal menus, improved resize handling*
 
 ## Contributing
 
 Contributions are welcome! Please submit pull requests or open issues on GitHub.
 
-> **Note**: Never make a pointer to the MENU_ITEM which was created via ```create_menu_item()``` (RESTRICTED PARAM).
+> **Important**: Never create a pointer to a `MENU_ITEM` created via `create_menu_item()` (RESTRICTED PARAM).
