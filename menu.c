@@ -1,11 +1,13 @@
 #include "menu.h"
 
-#define DEBUG 0
+// #define DEBUG
+
 #define DISABLED -1
 
 #define BUFFER_CAPACITY 128
-#define UPDATE_FREQUENCE 14 // ms
-#define EVENT_MAX_RECORDS 4
+#define UPDATE_FREQUENCE 2147483647 // ms
+#define ERROR_UPDATE_FREQUENCE 20 // ms
+#define EVENT_MAX_RECORDS 6
 
 #define FIX_VALUE 2
 
@@ -17,10 +19,17 @@
 
 // cached values
 static COORD zero_point = {0, 0};
-static DWORD written = 0, saved_size = 0;
+static DWORD written = 0;
 static COORD cached_size = {0, 0}; // saved screen size after the last _size_check function call
 static HANDLE hConsole, hConsoleError, hCurrent, _hError, hStdin; // cached handlers
 static CONSOLE_SCREEN_BUFFER_INFO hBack_csbi; // cached csbi
+
+BYTE menu_settings_initialized = 0;
+
+MENU_SETTINGS MENU_DEFAULT_SETTINGS;
+
+// dummy values
+static INPUT input = {0};
 
 // mouse flag
 static int holding = 0;
@@ -77,7 +86,7 @@ static void _init_hError();
 static HANDLE _createConsoleScreenBuffer(void);
 static void _draw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text, ...);
 static void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text);
-// static void _write_string(HANDLE hDestination, const char* restrict text, ...);
+static void _write_string(HANDLE hDestination, const char* restrict text, ...);
 static void _vwrite_string(HANDLE hDestination, const char* restrict text, va_list args);
 static void _lwrite_string(HANDLE hDestination, const char* restrict text);
 static void _setConsoleActiveScreenBuffer(HANDLE hBufferToActivate);
@@ -114,7 +123,13 @@ void change_width_policy(MENU restrict menu_to_change, int new_width_policy)
 
 void toggle_mouse(MENU restrict menu_to_change)
 {
-	menu_to_change->mouse_enabled = menu_to_change->mouse_enabled ^ 1;
+    menu_to_change->mouse_enabled = menu_to_change->mouse_enabled ^ 1;
+}
+
+void set_new_default_settings(MENU_SETTINGS new_settings)
+{
+    menu_settings_initialized = 1;
+    MENU_DEFAULT_SETTINGS = new_settings;
 }
 
 MENU create_menu()
@@ -125,11 +140,11 @@ MENU create_menu()
             _init_menu_system();
             _initialized = 1;
         }
-    MENU new_menu = (MENU)malloc(sizeof(struct __menu));
+    MENU new_menu = (MENU)calloc(1, sizeof(struct __menu));
 
     memset(new_menu, 0, sizeof(struct __menu));
     new_menu->count = 0;
-    new_menu->mouse_enabled = 1;
+    new_menu->mouse_enabled = MENU_DEFAULT_SETTINGS.mouse_enabled;
     new_menu->options = NULL;
     new_menu->running = 0;
     new_menu->active_buffer = 0;
@@ -225,8 +240,8 @@ void clear_option(MENU used_menu, MENU_ITEM option_to_clear)
         if (o[i] == option_to_clear)
             {
                 free(o[i]);
-                for (int k = i + 1; k < used_menu->count; k++)
-                    o[k-1] = o[k];
+                size_t elements_to_move = used_menu->count - i - 1;
+                if (elements_to_move > 0) memmove(&o[i], &o[i+1], elements_to_move * sizeof(MENU_ITEM));
                 used_menu->count--;
 
                 used_menu->selected_index = 0;
@@ -304,6 +319,17 @@ static void _init_menu_system()
     hStdin = GetStdHandle(STD_INPUT_HANDLE);
     hCurrent = hConsole;
     _init_hError();
+
+    input.type = INPUT_MOUSE;
+    input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
+
+    if (menu_settings_initialized ^ 1)
+        {
+            /* DEFAULT SETTINGS */
+            MENU_DEFAULT_SETTINGS.mouse_enabled = 0;
+            menu_settings_initialized = 1;
+        }
+
     srand(time(NULL));
 }
 
@@ -342,18 +368,19 @@ static void _draw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char*
         x, y
     });
 
+    //_write_string(hDestination, "\x1b[%d;%dH", y+1, x+1);
     _vwrite_string(hDestination, text, args);
     va_end(args);
 }
 
-/* static void _write_string(HANDLE hDestination, const char* restrict text, ...)
+static void _write_string(HANDLE hDestination, const char* restrict text, ...)
 {
     va_list args;
     va_start(args, text);
     _vwrite_string(hDestination, text, args);
     va_end(args);
 }
-*/
+
 
 static void _vwrite_string(HANDLE hDestination, const char* restrict text, va_list args)
 {
@@ -419,29 +446,22 @@ static HANDLE _find_first_active_menu_buffer()
 
 static void _clear_buffer(HANDLE hBuffer)
 {
-    static WORD basic_color = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
-    static COORD saved_buffer_size = {-1, -1};
-    static COORD bufferSize;
+    // static CONSOLE_SCREEN_BUFFER_INFO clr_csbi;
+    // static DWORD cell_count = 0;
 
-    if (GetConsoleScreenBufferInfo(hBuffer, &hBack_csbi))
-        {
-            // SetConsoleCursorPosition(hBuffer, zero_point);
-            bufferSize = hBack_csbi.dwSize;
-            if (saved_buffer_size.X != bufferSize.X || saved_buffer_size.Y != bufferSize.Y)
-                {
-                    saved_size = bufferSize.X * bufferSize.Y;
-                    saved_buffer_size = bufferSize;
-                }
+    // if (GetConsoleScreenBufferInfo(hBuffer, &clr_csbi))
+    // {
+    //COORD bufferSize = clr_csbi.dwSize;
+    // cell_count = bufferSize.X * bufferSize.Y;
 
-            FillConsoleOutputCharacter(hBuffer, ' ', saved_size, zero_point, &written);
-            FillConsoleOutputAttribute(hBuffer, basic_color,
-                                       saved_size, zero_point, &written);
-        }
+    // FillConsoleOutputCharacter(hBuffer, ' ', cell_count, zero_point, &written);
+    // FillConsoleOutputAttribute(hBuffer, clr_csbi.wAttributes, cell_count, zero_point, &written);
+    // }
+    _lwrite_string(hBuffer, "\x1b[2J");
 }
 
 static void _block_input(DWORD* oldMode)
 {
-    HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
     GetConsoleMode(hStdin, oldMode);
 
     DWORD newMode = *oldMode;
@@ -449,8 +469,14 @@ static void _block_input(DWORD* oldMode)
     newMode &= ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT);
     newMode |= ENABLE_WINDOW_INPUT;
     newMode |= ENABLE_MOUSE_INPUT;
+    newMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 
     SetConsoleMode(hStdin, newMode);
+}
+
+static void _reset_mouse_state()
+{
+    SendInput(1, &input, sizeof(INPUT));
 }
 
 static int _check_menu(unsigned long long saved_id)
@@ -495,7 +521,7 @@ static void _show_error_and_wait_extended(MENU menu, COORD newSize)
     BYTE running = 1;
     while (running)
         {
-            Sleep(UPDATE_FREQUENCE);
+            Sleep(ERROR_UPDATE_FREQUENCE);
 
             GetConsoleScreenBufferInfo(_hError, &hBack_csbi);
             cr_window = hBack_csbi.srWindow;
@@ -529,6 +555,8 @@ static void _renderMenu(const MENU used_menu)
     register int y_max = 0, y_min = 0, x_max = -1;
 
     register BYTE size_check = FALSE;
+
+    static BYTE something_is_selected = 0;
 
     HANDLE hBackBuffer = used_menu->hBuffer[0];
     CONSOLE_SCREEN_BUFFER_INFO active_csbi, csbi;
@@ -567,8 +595,20 @@ static void _renderMenu(const MENU used_menu)
     // pre-render checks
     if (mouse_input_enabled) used_menu->selected_index = DISABLED;
 
+    // debug values
+#ifdef DEBUG
+    int test_count = 0;
+#endif
+
+    // pre-render calls
+    _reset_mouse_state(); // resetting the mouse state because Windows is stupid
+
     while (used_menu->running)
         {
+#ifdef DEBUG
+            _draw_at_position(hCurrent, 0, 0, "%d   ", ++test_count);
+#endif
+
             GetConsoleScreenBufferInfo(hCurrent, &active_csbi);
 
             active_window = active_csbi.srWindow;
@@ -593,6 +633,7 @@ static void _renderMenu(const MENU used_menu)
                     SetConsoleScreenBufferSize(used_menu->hBuffer[1], current_size);
                     SetConsoleWindowInfo(used_menu->hBuffer[0], TRUE, &new_window);
                     SetConsoleWindowInfo(used_menu->hBuffer[1], TRUE, &new_window);
+                    FlushConsoleInputBuffer(hStdin);
                     used_menu->need_redraw = 1;
                 }
 
@@ -600,7 +641,12 @@ static void _renderMenu(const MENU used_menu)
                 {
                     hBackBuffer = used_menu->hBuffer[used_menu->active_buffer ^ 1];
                     _clear_buffer(hBackBuffer);
-                    //_draw_at_position(hBackBuffer, 0, 0, "__ID: %llu", used_menu->__ID);
+
+#ifdef DEBUG
+                    _draw_at_position(hBackBuffer, 0, 5, "__ID: %llu", used_menu->__ID);
+                    _draw_at_position(hBackBuffer, 10, 13, "SELECTED: %d ", something_is_selected);
+                    _draw_at_position(hBackBuffer, 0, 0, "%d   ", test_count);
+#endif
 
                     start.X = (current_size.X - menu_size.X) / 2;
                     start.Y = (current_size.Y - menu_size.Y) / 2 + FIX_VALUE;
@@ -613,8 +659,9 @@ static void _renderMenu(const MENU used_menu)
                     // options
                     x = start.X + 2;
                     y = start.Y + 2;
-					
-					y_min = y;
+
+                    x_max = 0;
+                    y_min = y;
                     for (i = 0; i < used_menu->count; i++, y++)
                         {
                             format = (i == used_menu->selected_index) ?
@@ -635,128 +682,135 @@ static void _renderMenu(const MENU used_menu)
                     used_menu->active_buffer ^= 1;
                     used_menu->need_redraw = FALSE;
                 }
-            // console input checking
-            if (GetNumberOfConsoleInputEvents(hStdin, &numEvents) && numEvents > 0)
+
+        wait_start:
+            ;
+            DWORD waitResult = WaitForSingleObject(hStdin, UPDATE_FREQUENCE);
+            if (waitResult == WAIT_OBJECT_0)
                 {
-                    BYTE is_native_key = 0;
-                    BYTE mouse_option_selected = 0;
-                    static BYTE something_is_selected = 0;
-                    ReadConsoleInput(hStdin, inputRecords, EVENT_MAX_RECORDS, &numEvents);
-                    for (event = 0; event < numEvents && is_native_key ^ 1; event++)
-                        switch(inputRecords[event].EventType)
-                            {
-                                case KEY_EVENT:
-                                    if (inputRecords[event].Event.KeyEvent.bKeyDown)
-                                        {
-                                            vk = inputRecords[event].Event.KeyEvent.wVirtualKeyCode;
-                                            is_native_key = (vk == VK_UP) || (vk == VK_DOWN) || (vk == VK_RETURN) || (vk == VK_ESCAPE) || (vk == VK_DELETE);
-                                            if (is_native_key)
+                    if (GetNumberOfConsoleInputEvents(hStdin, &numEvents) && numEvents > 0)
+                        {
+                            BYTE is_native_key = 0;
+                            BYTE mouse_option_selected = 0;
+                            ReadConsoleInput(hStdin, inputRecords, min(EVENT_MAX_RECORDS, numEvents), &numEvents);
+                            for (event = 0; event < numEvents && is_native_key ^ 1; event++)
+                                switch(inputRecords[event].EventType)
+                                    {
+                                        case KEY_EVENT:
+                                            if (inputRecords[event].Event.KeyEvent.bKeyDown)
                                                 {
-                                                    used_menu->need_redraw = TRUE;
-                                                    switch (vk)
+                                                    vk = inputRecords[event].Event.KeyEvent.wVirtualKeyCode;
+                                                    is_native_key = (vk == VK_UP) || (vk == VK_DOWN) || (vk == VK_RETURN) || (vk == VK_ESCAPE) || (vk == VK_DELETE);
+                                                    if (is_native_key)
                                                         {
-                                                            case VK_UP:
-                                                                used_menu->selected_index =
-                                                                    (used_menu->selected_index - 1 + used_menu->count) % used_menu->count;
-                                                                break;
+                                                            used_menu->need_redraw = TRUE;
+                                                            switch (vk)
+                                                                {
+                                                                    case VK_UP:
+                                                                        used_menu->selected_index =
+                                                                            (used_menu->selected_index - 1 + used_menu->count) % used_menu->count;
+                                                                        break;
 
-                                                            case VK_DOWN:
-                                                                used_menu->selected_index =
-                                                                    (used_menu->selected_index + 1) % used_menu->count;
-                                                                break;
+                                                                    case VK_DOWN:
+                                                                        used_menu->selected_index =
+                                                                            (used_menu->selected_index + 1) % used_menu->count;
+                                                                        break;
 
-                                                            case VK_RETURN: // ENTER
-                                                                if (used_menu->options[used_menu->selected_index]->callback && used_menu->options[used_menu->selected_index]->callback != NULL)
-                                                                    {
-                                                                    input_handler:
-                                                                        ;
-                                                                        _clear_buffer(hConsole);
-                                                                        _setConsoleActiveScreenBuffer(hConsole);
-                                                                        SetConsoleMode(hStdin, old_mode);
-
-                                                                        MENU_ITEM current_option = used_menu->options[used_menu->selected_index];
-                                                                        current_option->callback(used_menu, current_option->data_chunk);
-
-                                                                        if (_check_menu(saved_id))
+                                                                    case VK_RETURN: // ENTER
+                                                                        if (used_menu->options[used_menu->selected_index]->callback && used_menu->options[used_menu->selected_index]->callback != NULL)
                                                                             {
-                                                                                if (_size_check(used_menu, FALSE, 0)) _show_error_and_wait_extended(used_menu, cached_size);
-                                                                                else
+                                                                            input_handler:
+                                                                                ;
+                                                                                _clear_buffer(hConsole);
+                                                                                SetConsoleMode(hStdin, old_mode);
+                                                                                _setConsoleActiveScreenBuffer(hConsole);
+
+                                                                                MENU_ITEM current_option = used_menu->options[used_menu->selected_index];
+                                                                                current_option->callback(used_menu, current_option->data_chunk);
+
+                                                                                if (_check_menu(saved_id))
                                                                                     {
-                                                                                        _setConsoleActiveScreenBuffer(hBackBuffer);
-                                                                                        _block_input(&old_mode);
-                                                                                        // used_menu->need_redraw = TRUE;
+                                                                                        if (_size_check(used_menu, FALSE, 0)) _show_error_and_wait_extended(used_menu, cached_size);
+                                                                                        else
+                                                                                            {
+                                                                                                _setConsoleActiveScreenBuffer(hBackBuffer);
+                                                                                                _block_input(&old_mode);
+                                                                                                _reset_mouse_state(); // resetting the mouse state because Windows is stupid (or me)
+                                                                                            }
                                                                                     }
-                                                                            }
-                                                                        else goto end_render_loop;
-                                                                    }
-                                                                break;
-
-                                                            case VK_ESCAPE:
-                                                                clear_menu(used_menu);
-                                                                break;
-                                                            case VK_DELETE:
-                                                                if (DEBUG)
-                                                                    clear_option(used_menu, used_menu->options[used_menu->selected_index]);
-                                                                break;
-                                                        }
-                                                    last_selected_index = used_menu->selected_index;
-                                                    FlushConsoleInputBuffer(hStdin);
-                                                }
-                                        }
-                                    break;
-                                case MOUSE_EVENT:
-                                    if (mouse_input_enabled)
-                                        {
-                                            if (mouse_option_selected ^ 1)
-                                                {
-                                                    COORD mouse_pos = inputRecords[event].Event.MouseEvent.dwMousePosition;
-
-                                                    // checking boundaries
-                                                    if (mouse_pos.Y < y_max && mouse_pos.Y >= y_min
-                                                            && mouse_pos.X >= x && mouse_pos.X <= x_max) // check if mouse is within menu boundaries
-                                                        for (int k = 0; k < used_menu->count; k++)
-                                                            {
-                                                                if (mouse_pos.Y == used_menu->options[k]->boundaries.Y
-                                                                        && mouse_pos.X >= x && mouse_pos.X <= used_menu->options[k]->boundaries.X)
-                                                                    {
-                                                                        used_menu->selected_index = k;
-                                                                        mouse_option_selected = something_is_selected = is_native_key = TRUE;
-
-                                                                        if (last_selected_index != k)
-                                                                            {
-                                                                                used_menu->need_redraw = TRUE;
-                                                                                last_selected_index = k;
+                                                                                else goto end_render_loop;
                                                                             }
                                                                         break;
-                                                                    }
-                                                            }
-                                                }
 
-                                            // if nothing was selected but was selected before then resetting this "before"
-                                            if (mouse_option_selected ^ 1 && something_is_selected)
-                                                {
-                                                    something_is_selected = FALSE;
-                                                    used_menu->need_redraw = TRUE;
-                                                    used_menu->selected_index = DISABLED;
-                                                    last_selected_index = DISABLED;
-                                                }
-
-                                            if (something_is_selected)
-                                                {
-                                                    if (inputRecords[event].Event.MouseEvent.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED && holding ^ 1)
-                                                        {
-                                                            holding = 1;
-                                                            goto input_handler; // handling the input
+                                                                    case VK_ESCAPE:
+                                                                        clear_menu(used_menu);
+                                                                        break;
+#ifdef DEBUG
+                                                                    case VK_DELETE:
+                                                                        clear_option(used_menu, used_menu->options[used_menu->selected_index]);
+#endif
+                                                                        break;
+                                                                }
+                                                            last_selected_index = used_menu->selected_index;
+                                                            FlushConsoleInputBuffer(hStdin);
                                                         }
-                                                    else if (inputRecords[event].Event.MouseEvent.dwButtonState == 0) holding = 0;
                                                 }
+                                            break;
+                                        case MOUSE_EVENT:
+#ifdef DEBUG
+                                            _draw_at_position(hCurrent, 10, 2, "MOUSE POS: %d %d   ", inputRecords[event].Event.MouseEvent.dwMousePosition.X, inputRecords[event].Event.MouseEvent.dwMousePosition.Y);
+#endif
 
+                                            if (mouse_input_enabled)
+                                                {
+                                                    if (mouse_option_selected ^ 1)
+                                                        {
+                                                            register COORD mouse_pos = inputRecords[event].Event.MouseEvent.dwMousePosition;
 
-                                        }
-                                    break;
-                            }
+                                                            // checking boundaries
+                                                            if (mouse_pos.Y < y_max && mouse_pos.Y >= y_min
+                                                                    && mouse_pos.X >= x && mouse_pos.X <= x_max) // check if mouse is within menu options boundaries
+                                                                {
+                                                                    int selected_index = mouse_pos.Y - y_min;
+                                                                    if (mouse_pos.X <= used_menu->options[selected_index]->boundaries.X)
+                                                                        {
+                                                                            used_menu->selected_index = selected_index;
+                                                                            mouse_option_selected = something_is_selected = is_native_key = TRUE;
+
+                                                                            if (last_selected_index != selected_index)
+                                                                                {
+                                                                                    used_menu->need_redraw = TRUE;
+                                                                                    last_selected_index = selected_index;
+                                                                                }
+                                                                        }
+                                                                }
+                                                        }
+
+                                                    // if nothing was selected but was selected before then resetting this "before"
+                                                    if (mouse_option_selected ^ 1 && something_is_selected)
+                                                        {
+                                                            something_is_selected = FALSE;
+                                                            used_menu->need_redraw = TRUE;
+                                                            used_menu->selected_index = DISABLED;
+                                                            last_selected_index = DISABLED;
+                                                        }
+
+                                                    if (something_is_selected)
+                                                        {
+                                                            if (inputRecords[event].Event.MouseEvent.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED && holding ^ 1)
+                                                                {
+                                                                    holding = 1;
+                                                                    goto input_handler; // handling the input
+                                                                }
+                                                            else if (inputRecords[event].Event.MouseEvent.dwButtonState == 0) holding = 0;
+                                                        }
+                                                }
+                                            else goto wait_start;
+                                            break;
+                                    }
+                        }
+                    FlushConsoleInputBuffer(hStdin);
                 }
-            Sleep(UPDATE_FREQUENCE);
         }
 
 end_render_loop:; // anchor
