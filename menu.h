@@ -43,12 +43,17 @@
 struct __menu_item;
 struct __menu;
 
-typedef struct __menu_item* MENU_ITEM; 
+typedef struct __menu_item* MENU_ITEM;
 typedef struct __menu* MENU;
 
 typedef void (*menu_callback)(MENU, void*);
 
 typedef void* dpointer;
+
+typedef struct
+{
+	BYTE mouse_enabled;
+} MENU_SETTINGS;
 
 // function prototypes
 double tick();
@@ -66,6 +71,7 @@ int add_option(MENU used_menu, const MENU_ITEM item);
 void change_header(MENU used_menu, const char* restrict text);
 void change_footer(MENU used_menu, const char* restrict text);
 void toggle_mouse(MENU restrict menu_to_change);
+void set_new_default_settings(MENU_SETTINGS new_settings);
 void enable_menu(MENU used_menu);
 void clear_option(MENU used_menu, MENU_ITEM option_to_clear);
 void change_menu_policy(MENU menu_to_change, int new_header_policy, int new_footer_policy);
