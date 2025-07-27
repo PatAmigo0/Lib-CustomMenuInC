@@ -3,7 +3,7 @@
 This lightweight library provides a simple, easy-to-use menu system for Windows console applications. It features light customizable menu, keyboard navigation, and a clean abstraction layer.
 
 ## Version
-```0.8.8```
+```0.9.0 BETA```
 
 ## Features
 
@@ -15,7 +15,8 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 - Callback functions for menu selections
 - Dynamically changes the size and location of the menu in the center of the console
 - Mouse tracking
-- **Memory-safe menu item creation** with `create_menu_item()`
+- Clear abstraction layer
+- Safe mmemory managment
 - Easy to use!
 
 ## Installation
@@ -39,7 +40,7 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 ```c
 #include "menu.h"
 
-void menu_callback_example(void* unused, void* data_block)
+void menu_callback_example(MENU menu, dpointer data_block)
 {
     printf("Option selected!\n");
 }
@@ -64,22 +65,12 @@ int main()
 1. **`MENU create_menu()`**  
    Creates and returns a new menu object.
 
-2. **`MENU_ITEM create_menu_item(const char* restrict text, void (*callback)(void*, void*), void* data_to_send)`**  
+2. **`MENU_ITEM create_menu_item(const char* restrict text, void (*callback)(MENU, dpointer), dpointer data_to_send)`**  
    Creates a menu item with text and callback function.  
    *This is the recommended way to create menu items*.
 
 3. **`int add_option(MENU your_menu, menu_item* restrict your_item)`**  
    Adds an option to your menu.  
-   - `menu_item` struct:
-     ```c
-     typedef struct
-     {
-         char* text;                   // display text
-         void (*callback)(void* menu, void* data_block); // function to call when selected
-         void* data_chunk; // your value for transmission in the callback
-     } menu_item;
-     // MENU_ITEM is the pointer version of menu_item, menu_item shouldn't be used.
-     ```
 
 4. **`void change_header(MENU your_menu, const char* restrict text)`**  
    Sets the menu header text.
@@ -93,10 +84,13 @@ int main()
 7. **`void change_menu_policy(MENU menu, int header_policy, int footer_policy)`**  
    Controls header/footer visibility (1 = show, 0 = hide).
 
-8. **`void clear_menu(MENU menu)`**  
+8. **`void toggle_mouse(MENU menu)`**
+   Toggles mouse input.
+
+9. **`void clear_menu(MENU menu)`**  
    Destroys a menu and frees its resources.
 
-9. **`void clear_menus()`**
+10. **`void clear_menus()`**
    Destroys all the menus that you had in the program, and then shuts down the program.
 
 ### Creating Menu Items
@@ -129,10 +123,9 @@ add_option(my_menu, item);
 
 - **Callback Functions**:
   ```c
-  void custom_callback(void* menu)
+  void custom_callback(MENU menu)
   {
-      MENU m = (MENU)menu;
-      printf("Selected from menu with %d options\n", get_menu_options_amount(m));
+      printf("Selected from menu with %d options\n", get_menu_options_amount(menu));
       // access menu context if needed
   }
   ```
@@ -150,29 +143,29 @@ gcc <your_app.c> menu.c -o your_app
 #include <stdio.h>
 #include "menu.h"
 
-void file_action(void* unused)
+void file_action(MENU unused)
 {
     printf("\nFile action selected!\n");
     system("pause");
 }
 
-void edit_action(void* unused)
+void edit_action(MENU unused)
 {
     printf("\nEdit action selected!\n");
     system("pause");
 }
 
-void exit_action(void* m)
+void exit_action(MENU menu)
 {
-    MENU menu = (MENU)m;
     printf("\nExiting...\n");
-    clear_menus_and_exit();
+    clear_menu(menu);
 }
 
 int main()
 {
     MENU main_menu = create_menu();
-    
+    toggle_mouse(main_menu);
+
     // create menu items with create_menu_item
     add_option(main_menu, create_menu_item("Open File", file_action, NULL));
     add_option(main_menu, create_menu_item("Save File", file_action, NULL));
@@ -193,10 +186,10 @@ int main()
 
 ## Key Updates
 
-- Version 0.8.7 BETA -> 0.8.8
-- **`create_menu_item()` is now the recommended way** to create menu items (be careful of memory leaks if you don't use this)
-- You can pass any value to your callback via void pointer to the data_block
-- Memory management is handled automatically for menu items
+- Version 0.8.8 -> 0.9.0 BETA
+- Mouse support
+- You can pass any value to your callback via void pointer (dpointer) to the data_block
+- More efficent memory management
 - Provides better type safety and error prevention
 
 ## Limitations
@@ -204,8 +197,9 @@ int main()
 - Windows-only implementation
 - Console resize handling has minimum size requirements
 - Limited to vertical menus
-- Mouse support is still in BETA.
 - Some window resizing visual bugs
+
+  `All this is going to be added in the future.`
 
 ## Contributing
 
