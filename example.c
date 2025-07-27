@@ -374,7 +374,7 @@ static void common_after_sort(double elapsed_time)
     petc();
 }
 
-static void quick_sort_wrapper(void* unused)
+static void quick_sort_wrapper()
 {
     _copy((void*)s_array_copy, (void*)s_array_to_sort, s_array_alloc_size);
     double ntick = tick();
@@ -382,7 +382,7 @@ static void quick_sort_wrapper(void* unused)
     common_after_sort(tick() - ntick);
 }
 
-static void merge_sort_wrapper(void* unused)
+static void merge_sort_wrapper()
 {
     _copy((void*)s_array_copy, (void*)s_array_to_sort, s_array_alloc_size);
     double ntick = tick();
@@ -390,7 +390,7 @@ static void merge_sort_wrapper(void* unused)
     common_after_sort(tick() - ntick);
 }
 
-static void selection_sort_wrapper(void* unused)
+static void selection_sort_wrapper()
 {
     _copy((void*)s_array_copy, (void*)s_array_to_sort, s_array_alloc_size);
     double ntick = tick();
@@ -398,7 +398,7 @@ static void selection_sort_wrapper(void* unused)
     common_after_sort(tick() - ntick);
 }
 
-static void insertion_sort_wrapper(void* unused)
+static void insertion_sort_wrapper()
 {
     _copy((void*)s_array_copy, (void*)s_array_to_sort, s_array_alloc_size);
     double ntick = tick();
@@ -406,7 +406,7 @@ static void insertion_sort_wrapper(void* unused)
     common_after_sort(tick() - ntick);
 }
 
-static void bubble_sort_wrapper(void* unused)
+static void bubble_sort_wrapper()
 {
     _copy((void*)s_array_copy, (void*)s_array_to_sort, s_array_alloc_size);
     double ntick = tick();
@@ -425,12 +425,12 @@ void select_sort_type_arrays(int* array, int n)
     s_array_to_sort = array;
     s_array_size = n;
 
-    add_option(new_menu, create_menu_item("Use quick sort", quick_sort_wrapper));
-    add_option(new_menu, create_menu_item("Use merge sort", merge_sort_wrapper));
-    add_option(new_menu, create_menu_item("Use selection sort", selection_sort_wrapper));
-    add_option(new_menu, create_menu_item("Use insertion sort", insertion_sort_wrapper));
-    add_option(new_menu, create_menu_item("Use bubble sort", bubble_sort_wrapper));
-    add_option(new_menu, create_menu_item("Go back", go_back));
+    add_option(new_menu, create_menu_item("Use quick sort", quick_sort_wrapper, NULL));
+    add_option(new_menu, create_menu_item("Use merge sort", merge_sort_wrapper, NULL));
+    add_option(new_menu, create_menu_item("Use selection sort", selection_sort_wrapper, NULL));
+    add_option(new_menu, create_menu_item("Use insertion sort", insertion_sort_wrapper, NULL));
+    add_option(new_menu, create_menu_item("Use bubble sort", bubble_sort_wrapper, NULL));
+    add_option(new_menu, create_menu_item("Go back", go_back, NULL));
     enable_menu(new_menu);
 
     free(s_array_copy);
@@ -438,7 +438,7 @@ void select_sort_type_arrays(int* array, int n)
 }
 
 // MENU 4
-void menu4_item_1(void* unused)
+void menu4_item_1()
 {
     int result = system(COMMAND);
     if (result == 0)
@@ -475,7 +475,7 @@ void matrix_common_process(int** matrix, int n, int m)
     petc();
 }
 
-void menu3_item_1(void* unused)
+void menu3_item_1()
 {
     int n, m;
     printf("Enter the number of rows: ");
@@ -498,7 +498,7 @@ void menu3_item_1(void* unused)
     free_matrix(matrix, n);
 }
 
-void menu3_item_2(void* unused)
+void menu3_item_2()
 {
     int n, m;
     printf("Enter the number of rows: ");
@@ -542,7 +542,7 @@ void menu3_item_2(void* unused)
 }
 
 // MENU 2
-void menu2_item_1(void* unused)
+void menu2_item_1()
 {
     fflush(stdin);
     int n;
@@ -572,9 +572,10 @@ void menu2_item_1(void* unused)
     free(new_generated_array);
 }
 
-void menu2_item_2(void* m)
+void menu2_item_2(MENU m)
 {
-    clear_menu((MENU)m);
+    clear_menu(m); // clearing menu at the start, wont break because system handles that
+    
     fflush(stdin);
     int n, blocked = 0;
     printf("Please enter how much values you want to enter: ");
@@ -616,57 +617,54 @@ void menu2_item_2(void* m)
 }
 
 // MENU 1
-void menu1_item_1(void* unused)
+void menu1_item_1()
 {
     MENU new_menu = create_menu();
     change_header(new_menu, "Array control panel");
     change_menu_policy(new_menu, 1, 0);
-    add_option(new_menu, create_menu_item("Generate random array", menu2_item_1));
-    add_option(new_menu, create_menu_item("Enter your own array", menu2_item_2));
-    add_option(new_menu, create_menu_item("Go back", go_back));
+    add_option(new_menu, create_menu_item("Generate random array", menu2_item_1, NULL));
+    add_option(new_menu, create_menu_item("Enter your own array", menu2_item_2, NULL));
+    add_option(new_menu, create_menu_item("Go back", go_back, NULL));
     enable_menu(new_menu);
 }
 
-void menu1_item_2(void* unused)
+void menu1_item_2()
 {
     MENU new_menu = create_menu();
     change_header(new_menu, "Matrix control panel");
     change_menu_policy(new_menu, 1, 0);
-    add_option(new_menu, create_menu_item("Generate random matrix", menu3_item_1));
-    add_option(new_menu, create_menu_item("Enter your own matrix", menu3_item_2));
-    add_option(new_menu, create_menu_item("Go back", go_back));
+    change_width_policy(new_menu, 0);
+    add_option(new_menu, create_menu_item("Generate random matrix", menu3_item_1, NULL));
+    add_option(new_menu, create_menu_item("Enter your own matrix", menu3_item_2, NULL));
+    add_option(new_menu, create_menu_item("Go back", go_back, NULL));
     enable_menu(new_menu);
 }
 
-void menu1_item_3(void* unused)
+void menu1_item_3()
 {
     MENU new_menu = create_menu();
     change_header(new_menu, "File control");
     change_menu_policy(new_menu, 1, 0);
-    add_option(new_menu, create_menu_item("Sort input.csv and put in output.csv", menu4_item_1));
-    add_option(new_menu, create_menu_item("Go back", go_back));
+    add_option(new_menu, create_menu_item("Sort input.csv and put in output.csv", menu4_item_1, NULL));
+    add_option(new_menu, create_menu_item("Go back", go_back, NULL));
     enable_menu(new_menu);
 }
 
-void exit_menu(void* unused)
+void exit_menu()
 {
-    clear_menus();
-    exit(0);
+	clear_menus_and_exit();
 }
 
-/*
-	MAIN
-*/
 int main()
 {
+	MENU_SETTINGS new_settings = {1};
+	set_new_default_settings(new_settings);
+	
     SEED = time(NULL);
     MENU new_menu = create_menu();
-    add_option(new_menu, create_menu_item("Sort array", menu1_item_1));
-    add_option(new_menu, create_menu_item("Sort matrix", menu1_item_2));
-    add_option(new_menu, create_menu_item("Sort file by date", menu1_item_3));
-    add_option(new_menu, create_menu_item("Exit the program", exit_menu));
+    add_option(new_menu, create_menu_item("Sort array", menu1_item_1, NULL));
+    add_option(new_menu, create_menu_item("Sort matrix", menu1_item_2, NULL));
+    add_option(new_menu, create_menu_item("Sort file by date", menu1_item_3, NULL));
+    add_option(new_menu, create_menu_item("Exit the program", exit_menu, NULL));
     enable_menu(new_menu);
-
-    clear_menus();
-    return 0;
 }
