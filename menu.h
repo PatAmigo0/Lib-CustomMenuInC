@@ -40,13 +40,15 @@
 #define ERROR_COLOR    "\033[1;31m"  // red
 #define GREEN_COLOR    "\033[1;32m"
 
-typedef void (*menu_callback)(void*, void*);
-
 struct __menu_item;
 struct __menu;
 
 typedef struct __menu_item* MENU_ITEM; 
 typedef struct __menu* MENU;
+
+typedef void (*menu_callback)(MENU, void*);
+
+typedef void* dpointer;
 
 // function prototypes
 double tick();
@@ -63,6 +65,7 @@ MENU_ITEM create_menu_item(const char* restrict text, menu_callback callback, vo
 int add_option(MENU used_menu, const MENU_ITEM item);
 void change_header(MENU used_menu, const char* restrict text);
 void change_footer(MENU used_menu, const char* restrict text);
+void toggle_mouse(MENU restrict menu_to_change);
 void enable_menu(MENU used_menu);
 void clear_option(MENU used_menu, MENU_ITEM option_to_clear);
 void change_menu_policy(MENU menu_to_change, int new_header_policy, int new_footer_policy);
