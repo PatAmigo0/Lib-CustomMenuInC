@@ -1,7 +1,37 @@
-#ifndef MENU_H
-#define MENU_H
+#ifndef _MENU_H_
+#define _MENU_H_
 
+/* defines */
+#ifndef _STDIO_H_
+#include <stdio.h>
+#endif
+
+#ifndef _STDLIB_H_
+#include <stdlib.h>
+#endif
+
+#ifndef _WINDOWS_H_
 #include <windows.h>
+#endif
+
+#ifndef _STRING_H_
+#include <string.h>
+#endif
+
+#ifndef _STDARG_H_
+#include <stdarg.h>
+#endif
+
+#ifndef _TIME_H_
+#include <time.h>
+#endif
+
+//#ifndef _LIMITS_H_
+//#include <limits.h>
+//#endif
+
+/* end */
+
 #define RESET      "\033[0m"
 #define HEADER     "\033[44m\033[37m" // dark blue
 #define SUBHEADER  "\033[46m\033[30m" // light blue
@@ -10,49 +40,44 @@
 #define ERROR_COLOR    "\033[1;31m"  // red
 #define GREEN_COLOR    "\033[1;32m"
 
-typedef void (*menu_callback)(void* m);
+struct __menu_item;
+struct __menu;
 
-typedef struct menu_item 
+typedef struct __menu_item* MENU_ITEM;
+typedef struct __menu* MENU;
+
+typedef void (*menu_callback)(MENU, void*);
+
+typedef void* dpointer;
+
+typedef struct
 {
-    const char* text;
-    menu_callback callback;
-} menu_item;
-
-typedef menu_item* MENU_ITEM; 
-
-typedef struct __menu 
-{
-	int __ID;
-    int count;
-    MENU_ITEM* options;
-    int running;
-    int need_redraw;
-    int active_buffer;
-    HANDLE hBuffer[2];
-    int selected_index;
-    
-    int footer_policy;
-    int header_policy;
-    
-    const char* footer;
-    const char* header;
-    
-    COORD menu_size;
-} __menu;
-
-typedef __menu* MENU;
+	BYTE mouse_enabled;
+} MENU_SETTINGS;
 
 // function prototypes
 double tick();
+int get_menu_options_amount(MENU restrict menu);
+int is_menu_running(MENU menu);
+int get_menu_selected_index(MENU menu);
+const char* get_menu_header(MENU menu);
+const char* get_menu_footer(MENU menu);
+int get_menu_header_policy(MENU menu);
+int get_menu_footer_policy(MENU menu);
+int get_menu_width_policy(MENU menu);
 MENU create_menu();
-MENU_ITEM create_menu_item(const char* text, menu_callback callback);
-int add_option(const MENU used_menu, const MENU_ITEM item);
-void change_header(const MENU used_menu, const char* text);
-void change_footer(const MENU used_menu, const char* text);
-void enable_menu(const MENU used_menu);
-void clear_option(const MENU used_menu, MENU_ITEM option_to_clear);
-void change_menu_policy(const MENU menu_to_change, int new_header_policy, int new_footer_policy);
+MENU_ITEM create_menu_item(const char* restrict text, menu_callback callback, void* callback_data);
+int add_option(MENU used_menu, const MENU_ITEM item);
+void change_header(MENU used_menu, const char* restrict text);
+void change_footer(MENU used_menu, const char* restrict text);
+void toggle_mouse(MENU restrict menu_to_change);
+void set_new_default_settings(MENU_SETTINGS new_settings);
+void enable_menu(MENU used_menu);
+void clear_option(MENU used_menu, MENU_ITEM option_to_clear);
+void change_menu_policy(MENU menu_to_change, int new_header_policy, int new_footer_policy);
+void change_width_policy(MENU menu_to_change, int new_width_policy);
 void clear_menu(MENU menu_to_clear);
 void clear_menus();
+void clear_menus_and_exit();
 
 #endif
