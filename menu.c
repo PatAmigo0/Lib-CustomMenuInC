@@ -22,6 +22,9 @@ static COORD cached_size = {0, 0}; // saved screen size after the last _size_che
 static HANDLE hConsole, hConsoleError, hCurrent, _hError, hStdin; // cached handlers
 static CONSOLE_SCREEN_BUFFER_INFO hBack_csbi; // cached csbi
 
+// mouse flag
+static int holding = 0;
+
 // menu values
 static MENU* menus_array = NULL;
 static int menus_amount = 0;
@@ -37,9 +40,10 @@ const char* error_message =
 struct __menu_item
 {
     COORD boundaries;
+    int text_len;
     const char* text;
     menu_callback callback;
-    void* data_chunk;
+    dpointer data_chunk;
 }; // protecting menu_item
 
 struct __menu
@@ -108,6 +112,11 @@ void change_width_policy(MENU restrict menu_to_change, int new_width_policy)
     menu_to_change->width_policy = (new_width_policy && 1) || 0;
 }
 
+void toggle_mouse(MENU restrict menu_to_change)
+{
+	menu_to_change->mouse_enabled = menu_to_change->mouse_enabled ^ 1;
+}
+
 MENU create_menu()
 {
     static int _initialized = 0;
@@ -151,9 +160,10 @@ MENU_ITEM create_menu_item(const char* restrict text, menu_callback callback, vo
     MENU_ITEM item = (MENU_ITEM)malloc(sizeof(struct __menu_item));
     if (!item) return NULL;
     item->text = (text != NULL) ? text : DEFAULT_MENU_TEXT;
+    item->text_len = strlen(item->text);
     item->boundaries = (COORD)
     {
-        strlen(item->text) - 1, 0
+        item->text_len - 1, 0
     };
     item->callback = callback;
     item->data_chunk = callback_data;
@@ -196,7 +206,7 @@ void enable_menu(MENU used_menu)
 
     if (_size_check(used_menu, FALSE, 0))
         {
-        	_show_error_and_wait_extended(used_menu, cached_size);
+            _show_error_and_wait_extended(used_menu, cached_size);
             //clear_menu(used_menu);
             //return;
         }
@@ -516,6 +526,7 @@ static void _renderMenu(const MENU used_menu)
     unsigned long long saved_id;
 
     int last_selected_index = DISABLED;
+    register int y_max = 0, y_min = 0, x_max = -1;
 
     register BYTE size_check = FALSE;
 
@@ -539,7 +550,6 @@ static void _renderMenu(const MENU used_menu)
     saved_id = used_menu->__ID;
 
     register BYTE mouse_input_enabled = used_menu->mouse_enabled;
-    BYTE holding = 0, not_holding = 1;
 
     used_menu->need_redraw = 1;
 
@@ -593,7 +603,7 @@ static void _renderMenu(const MENU used_menu)
                     //_draw_at_position(hBackBuffer, 0, 0, "__ID: %llu", used_menu->__ID);
 
                     start.X = (current_size.X - menu_size.X) / 2;
-                    start.Y = (current_size.Y - menu_size.Y) / 2 + 2;
+                    start.Y = (current_size.Y - menu_size.Y) / 2 + FIX_VALUE;
 
                     // header
                     if (used_menu->header_policy)
@@ -603,15 +613,19 @@ static void _renderMenu(const MENU used_menu)
                     // options
                     x = start.X + 2;
                     y = start.Y + 2;
-
-                    for (i = 0; i < used_menu->count; i++)
+					
+					y_min = y;
+                    for (i = 0; i < used_menu->count; i++, y++)
                         {
                             format = (i == used_menu->selected_index) ?
                                      HIGHLIGHT "%s" RESET : "%s";
                             _draw_at_position(hBackBuffer, x, y, format, used_menu->options[i]->text);
                             used_menu->options[i]->boundaries.Y = y;
-                            y++;
+                            used_menu->options[i]->boundaries.X = x + used_menu->options[i]->text_len - 1;
+                            if (used_menu->options[i]->boundaries.X > x_max)
+                                x_max = used_menu->options[i]->boundaries.X;
                         }
+                    y_max = y;
 
                     // footer
                     if (used_menu->footer_policy)
@@ -661,8 +675,8 @@ static void _renderMenu(const MENU used_menu)
                                                                         SetConsoleMode(hStdin, old_mode);
 
                                                                         MENU_ITEM current_option = used_menu->options[used_menu->selected_index];
-                                                                        current_option->callback((void*)used_menu, current_option->data_chunk);
-																		
+                                                                        current_option->callback(used_menu, current_option->data_chunk);
+
                                                                         if (_check_menu(saved_id))
                                                                             {
                                                                                 if (_size_check(used_menu, FALSE, 0)) _show_error_and_wait_extended(used_menu, cached_size);
@@ -696,22 +710,26 @@ static void _renderMenu(const MENU used_menu)
                                             if (mouse_option_selected ^ 1)
                                                 {
                                                     COORD mouse_pos = inputRecords[event].Event.MouseEvent.dwMousePosition;
-                                                    // checking boundaries
-                                                    for (int k = 0; k < used_menu->count; k++)
-                                                        {
-                                                            if (mouse_pos.Y == used_menu->options[k]->boundaries.Y && mouse_pos.X >= x && mouse_pos.X <= x + used_menu->options[k]->boundaries.X)
-                                                                {
-                                                                    used_menu->selected_index = k;
-                                                                    mouse_option_selected = something_is_selected = is_native_key = TRUE;
 
-                                                                    if (last_selected_index != k)
-                                                                        {
-                                                                            used_menu->need_redraw = TRUE;
-                                                                            last_selected_index = k;
-                                                                        }
-                                                                    break;
-                                                                }
-                                                        }
+                                                    // checking boundaries
+                                                    if (mouse_pos.Y < y_max && mouse_pos.Y >= y_min
+                                                            && mouse_pos.X >= x && mouse_pos.X <= x_max) // check if mouse is within menu boundaries
+                                                        for (int k = 0; k < used_menu->count; k++)
+                                                            {
+                                                                if (mouse_pos.Y == used_menu->options[k]->boundaries.Y
+                                                                        && mouse_pos.X >= x && mouse_pos.X <= used_menu->options[k]->boundaries.X)
+                                                                    {
+                                                                        used_menu->selected_index = k;
+                                                                        mouse_option_selected = something_is_selected = is_native_key = TRUE;
+
+                                                                        if (last_selected_index != k)
+                                                                            {
+                                                                                used_menu->need_redraw = TRUE;
+                                                                                last_selected_index = k;
+                                                                            }
+                                                                        break;
+                                                                    }
+                                                            }
                                                 }
 
                                             // if nothing was selected but was selected before then resetting this "before"
@@ -722,15 +740,18 @@ static void _renderMenu(const MENU used_menu)
                                                     used_menu->selected_index = DISABLED;
                                                     last_selected_index = DISABLED;
                                                 }
-						
-                                            if (something_is_selected && inputRecords[event].Event.MouseEvent.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED)
-                                            {
-                                            	not_holding = 0;
-                                            	holding = 1;
-                                            	goto input_handler; // handling the input
-											}
-												
-                                                
+
+                                            if (something_is_selected)
+                                                {
+                                                    if (inputRecords[event].Event.MouseEvent.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED && holding ^ 1)
+                                                        {
+                                                            holding = 1;
+                                                            goto input_handler; // handling the input
+                                                        }
+                                                    else if (inputRecords[event].Event.MouseEvent.dwButtonState == 0) holding = 0;
+                                                }
+
+
                                         }
                                     break;
                             }
@@ -739,7 +760,7 @@ static void _renderMenu(const MENU used_menu)
         }
 
 end_render_loop:; // anchor
-	
+
     // cleanup
     FlushConsoleInputBuffer(hStdin);
     if (menus_amount == 0)
