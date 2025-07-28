@@ -93,6 +93,7 @@
 #define BRIGHT_YELLOW_BG_BLACK_TEXT "\033[103;30m"
 
 // screen managment (vt)
+#define RESET_MOUSE_POSITION "\033[H"
 #define CLEAR_SCREEN "\x1b[2J"
 #define CLEAR_SCROLL_BUFFER "\x1b[3J"
 
@@ -111,7 +112,7 @@ struct __menu_color_object
 typedef struct __menu_item* MENU_ITEM;
 typedef struct __menu* MENU;
 
-typedef void (*menu_callback)(MENU, void*);
+typedef void (*__menu_callback)(MENU, void*);
 typedef void* dpointer;
 typedef struct __menu_settings* MENU_SETTINGS;
 typedef struct __menu_color_object* MENU_COLOR;
@@ -127,7 +128,7 @@ int get_menu_header_policy(MENU menu);
 int get_menu_footer_policy(MENU menu);
 int get_menu_width_policy(MENU menu);
 MENU create_menu();
-MENU_ITEM create_menu_item(const char* restrict text, menu_callback callback, void* callback_data);
+MENU_ITEM create_menu_item(const char* restrict text, __menu_callback callback, void* callback_data);
 MENU_SETTINGS create_new_settings();
 MENU_COLOR create_color_object();
 int add_option(MENU used_menu, const MENU_ITEM item);
