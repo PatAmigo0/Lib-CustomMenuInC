@@ -1,10 +1,9 @@
-
 # Windows Console Menu Library
 
 This lightweight library provides a simple, easy-to-use menu system for Windows console applications. It features customizable menus, keyboard and mouse navigation, and a clean abstraction layer.
 
 ## Version
-```0.9.1```
+```0.9.2 BETA```
 
 ## Features
 
@@ -19,6 +18,9 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 - Clear abstraction layer
 - Safe memory management
 - Easy to use!
+- **New: Advanced color customization** (v0.9.2 BETA)
+- **New: Default settings configuration** (v0.9.2 BETA)
+- **New: Menu color customization** (v0.9.2 BETA)
 
 ## Installation
 
@@ -28,12 +30,12 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 #include "menu.h"
 ```
 
-
 ## Requirements
 
 - Windows operating system
 - C99 compatible compiler
 - Standard Windows libraries
+- Console supporting ANSI escape codes (Windows 10+)
 
 ## Usage
 
@@ -111,42 +113,158 @@ int main()
 13. **`void toggle_mouse(MENU menu)`**  
     Toggles mouse input support.
 
-### Configuration
-14. **`void set_new_default_settings(MENU_SETTINGS settings)`**  
+### Configuration (New in v0.9.2 BETA)
+14. **`MENU_SETTINGS create_new_settings()`**  
+    Creates a new settings object with default values.
+
+15. **`void set_default_menu_settings(MENU_SETTINGS settings)`**  
     Sets default settings for new menus.
 
+### Color Management (New in v0.9.2 BETA)
+16. **`MENU_COLOR create_color_object()`**  
+    Creates a new color object with default colors.
+
+17. **`void set_color_object(MENU menu, MENU_COLOR color_object)`**  
+    Applies color scheme to a specific menu.
+
+18. **`void set_default_color_object(MENU_COLOR color_object)`**  
+    Sets default color scheme for new menus.
+
 ### Information Getters
-15. **`int get_menu_options_amount(MENU menu)`**  
+19. **`int get_menu_options_amount(MENU menu)`**  
     Returns number of options in menu.
 
-16. **`int is_menu_running(MENU menu)`**  
+20. **`int is_menu_running(MENU menu)`**  
     Returns 1 if menu is active, 0 otherwise.
 
-17. **`int get_menu_selected_index(MENU menu)`**  
+21. **`int get_menu_selected_index(MENU menu)`**  
     Returns currently selected index.
 
-18. **`const char* get_menu_header(MENU menu)`**  
+22. **`const char* get_menu_header(MENU menu)`**  
     Returns current header text.
 
-19. **`const char* get_menu_footer(MENU menu)`**  
+23. **`const char* get_menu_footer(MENU menu)`**  
     Returns current footer text.
 
-20. **`int get_menu_header_policy(MENU menu)`**  
+24. **`int get_menu_header_policy(MENU menu)`**  
     Returns header visibility status.
 
-21. **`int get_menu_footer_policy(MENU menu)`**  
+25. **`int get_menu_footer_policy(MENU menu)`**  
     Returns footer visibility status.
 
-22. **`int get_menu_width_policy(MENU menu)`**  
+26. **`int get_menu_width_policy(MENU menu)`**  
     Returns width policy status.
 
-## Advanced Example with dpointer
+## Color Customization
+
+The library supports extensive color customization through ANSI escape codes. You can create custom color combinations for headers and footers by combining foreground and background colors.
+
+### Basic Color Macros
+The library provides predefined color macros:
+
+#### Text Colors (Foreground)
+- `BLACK_TEXT`
+- `RED_TEXT`
+- `GREEN_TEXT`
+- `YELLOW_TEXT`
+- `BLUE_TEXT`
+- `MAGENTA_TEXT`
+- `CYAN_TEXT`
+- `WHITE_TEXT`
+- `BRIGHT_BLACK_TEXT`
+- `BRIGHT_RED_TEXT`
+- `BRIGHT_GREEN_TEXT`
+- `BRIGHT_YELLOW_TEXT`
+- `BRIGHT_BLUE_TEXT`
+- `BRIGHT_MAGENTA_TEXT`
+- `BRIGHT_CYAN_TEXT`
+- `BRIGHT_WHITE_TEXT`
+
+#### Background Colors
+- `BLACK_BG`
+- `RED_BG`
+- `GREEN_BG`
+- `YELLOW_BG`
+- `BLUE_BG`
+- `MAGENTA_BG`
+- `CYAN_BG`
+- `WHITE_BG`
+- `BRIGHT_BLACK_BG`
+- `BRIGHT_RED_BG`
+- `BRIGHT_GREEN_BG`
+- `BRIGHT_YELLOW_BG`
+- `BRIGHT_BLUE_BG`
+- `BRIGHT_MAGENTA_BG`
+- `BRIGHT_CYAN_BG`
+- `BRIGHT_WHITE_BG`
+
+### Combining Colors
+You can combine foreground and background colors by concatenating the macros. The general format is:
+
+```
+BACKGROUND + FOREGROUND
+```
+
+Example:
+```markdown
+// yellow background with blue text
+custom_colors->footerColor = YELLOW_BG BLUE_TEXT;
+
+// bright red background with white text
+custom_colors->headerColor = BRIGHT_RED_BG WHITE_TEXT;
+```
+
+### Adding Text Styles
+You can also add text styles to your color combinations:
+
+```markdown
+// underlined text on green background
+custom_colors->headerColor = GREEN_BG WHITE_TEXT UNDERLINE_TEXT;
+
+// bold yellow text on dark blue background
+custom_colors->footerColor = DARK_BLUE_BG BOLD_TEXT YELLOW_TEXT;
+```
+
+Available text styles:
+- `BOLD_TEXT`
+- `DIM_TEXT`
+- `ITALIC_TEXT`
+- `UNDERLINE_TEXT`
+- `BLINK_TEXT`
+- `REVERSE_TEXT` (swap foreground and background)
+- `HIDDEN_TEXT`
+- `STRIKETHROUGH_TEXT`
+
+### Predefined Combinations
+The library includes some predefined color combinations:
+
+1. `DARK_BLUE_BG_WHITE_TEXT`  
+   ![Dark Blue BG with White Text](https://placehold.co/200x40/00008B/FFFFFF?text=Dark+Blue+BG+White+Text)
+
+2. `CYAN_BG_BLACK_TEXT`  
+   ![Cyan BG with Black Text](https://placehold.co/200x40/00FFFF/000000?text=Cyan+BG+Black+Text)
+
+3. `WHITE_BG_BLACK_TEXT`  
+   ![White BG with Black Text](https://placehold.co/200x40/FFFFFF/000000?text=White+BG+Black+Text)
+
+4. `GREEN_BG_WHITE_TEXT`  
+   ![Green BG with White Text](https://placehold.co/200x40/008000/FFFFFF?text=Green+BG+White+Text)
+
+5. `RED_BG_WHITE_TEXT`  
+   ![Red BG with White Text](https://placehold.co/200x40/FF0000/FFFFFF?text=Red+BG+White+Text)
+
+6. `YELLOW_BG_BLACK_TEXT`  
+   ![Yellow BG with Black Text](https://placehold.co/200x40/FFFF00/000000?text=Yellow+BG+Black+Text)
+
+7. `BRIGHT_RED_BG_WHITE_TEXT`  
+   ![Bright Red BG with White Text](https://placehold.co/200x40/FF3333/FFFFFF?text=Bright+Red+BG+White+Text)
+
+## Example with Colors and Custom Settings
 
 ```c
 #include <stdio.h>
 #include "menu.h"
 
-// define custom data structure
 typedef struct
 {
     int id;
@@ -160,39 +278,28 @@ void file_callback(MENU menu, dpointer data)
            file_data->name, file_data->id);
 }
 
-void edit_callback(MENU menu, dpointer data)
-{
-    int* value = (int*)data;
-    printf("Edit action called with value: %d\n", *value);
-}
-
-void exit_callback(MENU menu, dpointer data)
-{
-    printf("Exiting program...\n");
-    clear_menus_and_exit();
-}
+// ... other callbacks ...
 
 int main()
 {
-    // create data for callbacks
-    MenuData open_data = {1, "Open File"};
-    MenuData save_data = {2, "Save File"};
-    int edit_value = 42;
-    
-    MENU main_menu = create_menu();
-    toggle_mouse(main_menu);
+    // create custom settings
+    MENU_SETTINGS custom_settings = create_new_settings();
+    custom_settings->mouse_enabled = 1;
+    set_default_menu_settings(custom_settings);
 
-    // create menu items with different data types
+    // create custom colors
+    MENU_COLOR custom_colors = create_color_object();
+    custom_colors->headerColor = BRIGHT_RED_BG_WHITE_TEXT;
+    custom_colors->footerColor = GREEN_BG_BLACK_TEXT;
+    set_default_color_object(custom_colors);
+
+    MENU main_menu = create_menu();
+    
+    // add menu items
+    MenuData open_data = {1, "Open File"};
     add_option(main_menu, create_menu_item("Open", file_callback, &open_data));
-    add_option(main_menu, create_menu_item("Save", file_callback, &save_data));
-    add_option(main_menu, create_menu_item("Edit", edit_callback, &edit_value));
-    add_option(main_menu, create_menu_item("Exit", exit_callback, NULL));
     
-    change_header(main_menu, "ADVANCED EXAMPLE");
-    change_footer(main_menu, "Pass different data types to callbacks");
-    
-    // hide footer
-    change_menu_policy(main_menu, 1, 0);
+    // ... other options ...
     
     enable_menu(main_menu);
     return 0;
@@ -206,16 +313,19 @@ Compile with your project:
 gcc <your_app.c> menu.c -o your_app
 ```
 
-## Key Updates
+## Key Updates (v0.9.2 BETA)
 
-- Version 0.9.0 BETA → 0.9.1
-- Less recources consume
-- Program works 20x faster and smoother
-- A lot of bugs were fixed
+- Added advanced color customization system
+- Implemented default settings configuration
+- Reduced resource consumption by a lot (v0.9.1)
+- Improved performance (20x faster rendering) (v0.9.1)
+- Fixed mouse input handling issues (v0.9.1)
+- Improved buffer management
 
 ## Limitations
 
 - Windows-only implementation
+- Requires console supporting ANSI escape codes (Windows 10+)
 - Console resize handling has minimum size requirements
 - Limited to vertical menus
 - Some window resizing visual bugs
