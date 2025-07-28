@@ -49,7 +49,7 @@ void secure_output()
 void petc()
 {
     fflush(stdin);
-    printf("\nPress %sEnter%s to continue...\n",HIGHLIGHT, RESET);
+    printf("\nPress %sEnter%s to continue...\n", WHITE_BG_BLACK_TEXT, RESET_ALL_STYLES);
     getchar();
     system("cls");
 }
@@ -57,7 +57,7 @@ void petc()
 void error_input_handle()
 {
     secure_output();
-    printf("%sInvalid input.%s\n", ERROR_COLOR, RESET);
+    printf("%sInvalid input.%s\n", BRIGHT_RED_TEXT, RESET_ALL_STYLES);
     petc();
 }
 
@@ -365,7 +365,7 @@ static void common_after_sort(double elapsed_time)
     printf("Time taken: %lfs\n", elapsed_time);
     fflush(stdout);
     char answer;
-    printf("Do you want to view the sorted array? (%sY%s/%sN%s): ", GREEN_COLOR, RESET, ERROR_COLOR, RESET);
+    printf("Do you want to view the sorted array? (%sY%s/%sN%s): ", BRIGHT_GREEN_TEXT, RESET_ALL_STYLES, BRIGHT_RED_TEXT, RESET_ALL_STYLES);
     scanf(" %c", &answer);
     secure_output();
     if (answer == 'Y' || answer == 'y')
@@ -442,9 +442,9 @@ void menu4_item_1()
 {
     int result = system(COMMAND);
     if (result == 0)
-        printf(SUCCESS"Successfully sorted file!\n"RESET);
+        printf(GREEN_BG_WHITE_TEXT"Successfully sorted file!\n"RESET_ALL_STYLES);
     else
-        printf(ERROR_COLOR"Error while trying, check these files:"COMMAND"\n"RESET);
+        printf(BRIGHT_RED_TEXT"Error while trying, check these files:"COMMAND"\n"RESET_ALL_STYLES);
 
     petc();
 }
@@ -453,7 +453,7 @@ void menu4_item_1()
 void matrix_common_process(int** matrix, int n, int m)
 {
     char answer;
-    printf("Do you want to view the generated matrix? (%sY%s/%sN%s): ", GREEN_COLOR, RESET, ERROR_COLOR, RESET);
+    printf("Do you want to view the generated matrix? (%sY%s/%sN%s): ", BRIGHT_GREEN_TEXT, RESET_ALL_STYLES, BRIGHT_RED_TEXT, RESET_ALL_STYLES);
     scanf(" %c", &answer);
     secure_output();
     if (answer == 'Y' || answer == 'y')
@@ -466,7 +466,7 @@ void matrix_common_process(int** matrix, int n, int m)
 
     printf("Time taken for sorting: %lfs\n", end_time - start_time);
 
-    printf("Do you want to view the sorted matrix? (%sY%s/%sN%s): ", GREEN_COLOR, RESET, ERROR_COLOR, RESET);
+    printf("Do you want to view the sorted matrix? (%sY%s/%sN%s): ", BRIGHT_GREEN_TEXT, RESET_ALL_STYLES, BRIGHT_RED_TEXT, RESET_ALL_STYLES);
     scanf(" %c", &answer);
     secure_output();
     if (answer == 'Y' || answer == 'y')
@@ -529,7 +529,7 @@ void menu3_item_2()
                     for (j = 0; j < m; j++)
                         if (scanf("%d", &matrix[i][j]) != 1)
                             {
-                                printf(ERROR_COLOR "Invalid input at column %d. Please re-enter the entire row.\n" RESET, j+1);
+                                printf(BRIGHT_RED_TEXT "Invalid input at column %d. Please re-enter the entire row.\n" RESET_ALL_STYLES, j+1);
                                 secure_output();
                                 row_valid = 0;
                                 break;
@@ -555,7 +555,7 @@ void menu2_item_1()
 
     secure_output();
     int* new_generated_array = generate_random_array(n);
-    printf("Do you want to view generated array? (%sY%s/%sN%s): ", GREEN_COLOR, RESET, ERROR_COLOR, RESET);
+    printf("Do you want to view generated array? (%sY%s/%sN%s): ", BRIGHT_GREEN_TEXT, RESET_ALL_STYLES, BRIGHT_RED_TEXT, RESET_ALL_STYLES);
     char answer;
     if (scanf(" %c", &answer) != 1)
         {
@@ -596,10 +596,10 @@ void menu2_item_2(MENU m)
                     fflush(stdin);
                     error_count++;
                     if (error_count < MAX_ERRORS)
-                        puts(ERROR_COLOR"Wrong value! This one wont be counted, enter again."RESET);
+                        puts(BRIGHT_RED_TEXT"Wrong value! This one wont be counted, enter again."RESET_ALL_STYLES);
                     else
                         {
-                            puts(ERROR_COLOR"Too much mistakes, exiting..."RESET);
+                            puts(BRIGHT_RED_TEXT"Too much mistakes, exiting..."RESET_ALL_STYLES);
                             blocked = 1;
                             break;
                         }
@@ -609,7 +609,7 @@ void menu2_item_2(MENU m)
     if (blocked) petc();
     else
         {
-            printf(GREEN_COLOR"\nSuccess!\n"RESET);
+            printf(BRIGHT_GREEN_TEXT"\nSuccess!\n"RESET_ALL_STYLES);
             petc();
             select_sort_type_arrays(new_array, n);
         }
@@ -657,11 +657,18 @@ void exit_menu()
 
 int main()
 {
-	MENU_SETTINGS new_settings = {1};
-	set_new_default_settings(new_settings);
+	MENU_SETTINGS new_settings = create_new_settings();
+	new_settings->mouse_enabled = 1;
+	set_default_menu_settings(new_settings);
 	
+	MENU_COLOR new_color = create_color_object();
+	new_color->headerColor = GREEN_BG_WHITE_TEXT;
+	new_color->footerColor = YELLOW_BG BLUE_TEXT;
+	set_default_color_object(new_color);
+
     SEED = time(NULL);
     MENU new_menu = create_menu();
+    
     add_option(new_menu, create_menu_item("Sort array", menu1_item_1, NULL));
     add_option(new_menu, create_menu_item("Sort matrix", menu1_item_2, NULL));
     add_option(new_menu, create_menu_item("Sort file by date", menu1_item_3, NULL));
