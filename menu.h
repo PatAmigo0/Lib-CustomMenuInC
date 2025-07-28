@@ -92,6 +92,10 @@
 #define BRIGHT_RED_BG_WHITE_TEXT    "\033[101;97m"
 #define BRIGHT_YELLOW_BG_BLACK_TEXT "\033[103;30m"
 
+// screen managment (vt)
+#define CLEAR_SCREEN "\x1b[2J"
+#define CLEAR_SCROLL_BUFFER "\x1b[3J"
+
 struct __menu_item;
 struct __menu;
 struct __menu_settings
