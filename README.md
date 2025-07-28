@@ -1,5 +1,3 @@
-You're absolutely right! I missed documenting the `create_new_settings()` function. Here's the updated README with the missing function added:
-
 # Windows Console Menu Library
 
 This lightweight library provides a simple, easy-to-use menu system for Windows console applications. It features customizable menus, keyboard and mouse navigation, and a clean abstraction layer.
@@ -22,6 +20,7 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 - Easy to use!
 - **New: Advanced color customization** (v0.9.2 BETA)
 - **New: Default settings configuration** (v0.9.2 BETA)
+- **New: Menu color customization** (v0.9.2 BETA)
 
 ## Installation
 
@@ -156,7 +155,111 @@ int main()
 26. **`int get_menu_width_policy(MENU menu)`**  
     Returns width policy status.
 
-## Advanced Example with Colors and Custom Settings
+## Color Customization
+
+The library supports extensive color customization through ANSI escape codes. You can create custom color combinations for headers and footers by combining foreground and background colors.
+
+### Basic Color Macros
+The library provides predefined color macros:
+
+#### Text Colors (Foreground)
+- `BLACK_TEXT`
+- `RED_TEXT`
+- `GREEN_TEXT`
+- `YELLOW_TEXT`
+- `BLUE_TEXT`
+- `MAGENTA_TEXT`
+- `CYAN_TEXT`
+- `WHITE_TEXT`
+- `BRIGHT_BLACK_TEXT`
+- `BRIGHT_RED_TEXT`
+- `BRIGHT_GREEN_TEXT`
+- `BRIGHT_YELLOW_TEXT`
+- `BRIGHT_BLUE_TEXT`
+- `BRIGHT_MAGENTA_TEXT`
+- `BRIGHT_CYAN_TEXT`
+- `BRIGHT_WHITE_TEXT`
+
+#### Background Colors
+- `BLACK_BG`
+- `RED_BG`
+- `GREEN_BG`
+- `YELLOW_BG`
+- `BLUE_BG`
+- `MAGENTA_BG`
+- `CYAN_BG`
+- `WHITE_BG`
+- `BRIGHT_BLACK_BG`
+- `BRIGHT_RED_BG`
+- `BRIGHT_GREEN_BG`
+- `BRIGHT_YELLOW_BG`
+- `BRIGHT_BLUE_BG`
+- `BRIGHT_MAGENTA_BG`
+- `BRIGHT_CYAN_BG`
+- `BRIGHT_WHITE_BG`
+
+### Combining Colors
+You can combine foreground and background colors by concatenating the macros. The general format is:
+
+```
+BACKGROUND + FOREGROUND
+```
+
+Example:
+```markdown
+// yellow background with blue text
+custom_colors->footerColor = YELLOW_BG BLUE_TEXT;
+
+// bright red background with white text
+custom_colors->headerColor = BRIGHT_RED_BG WHITE_TEXT;
+```
+
+### Adding Text Styles
+You can also add text styles to your color combinations:
+
+```markdown
+// underlined text on green background
+custom_colors->headerColor = GREEN_BG WHITE_TEXT UNDERLINE_TEXT;
+
+// bold yellow text on dark blue background
+custom_colors->footerColor = DARK_BLUE_BG BOLD_TEXT YELLOW_TEXT;
+```
+
+Available text styles:
+- `BOLD_TEXT`
+- `DIM_TEXT`
+- `ITALIC_TEXT`
+- `UNDERLINE_TEXT`
+- `BLINK_TEXT`
+- `REVERSE_TEXT` (swap foreground and background)
+- `HIDDEN_TEXT`
+- `STRIKETHROUGH_TEXT`
+
+### Predefined Combinations
+The library includes some predefined color combinations:
+
+1. `DARK_BLUE_BG_WHITE_TEXT`  
+   ![Dark Blue BG with White Text](https://placehold.co/200x40/00008B/FFFFFF?text=Dark+Blue+BG+White+Text)
+
+2. `CYAN_BG_BLACK_TEXT`  
+   ![Cyan BG with Black Text](https://placehold.co/200x40/00FFFF/000000?text=Cyan+BG+Black+Text)
+
+3. `WHITE_BG_BLACK_TEXT`  
+   ![White BG with Black Text](https://placehold.co/200x40/FFFFFF/000000?text=White+BG+Black+Text)
+
+4. `GREEN_BG_WHITE_TEXT`  
+   ![Green BG with White Text](https://placehold.co/200x40/008000/FFFFFF?text=Green+BG+White+Text)
+
+5. `RED_BG_WHITE_TEXT`  
+   ![Red BG with White Text](https://placehold.co/200x40/FF0000/FFFFFF?text=Red+BG+White+Text)
+
+6. `YELLOW_BG_BLACK_TEXT`  
+   ![Yellow BG with Black Text](https://placehold.co/200x40/FFFF00/000000?text=Yellow+BG+Black+Text)
+
+7. `BRIGHT_RED_BG_WHITE_TEXT`  
+   ![Bright Red BG with White Text](https://placehold.co/200x40/FF3333/FFFFFF?text=Bright+Red+BG+White+Text)
+
+## Example with Colors and Custom Settings
 
 ```c
 #include <stdio.h>
