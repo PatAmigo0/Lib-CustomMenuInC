@@ -52,7 +52,7 @@ struct __menu_item
     COORD boundaries;
     int text_len;
     const char* text;
-    menu_callback callback;
+    __menu_callback callback;
     dpointer data_chunk;
 }; // protecting menu_item
 
@@ -192,7 +192,7 @@ MENU create_menu()
     return new_menu;
 }
 
-MENU_ITEM create_menu_item(const char* restrict text, menu_callback callback, void* callback_data)
+MENU_ITEM create_menu_item(const char* restrict text, __menu_callback callback, void* callback_data)
 {
     MENU_ITEM item = (MENU_ITEM)malloc(sizeof(struct __menu_item));
     if (!item) return NULL;
@@ -508,6 +508,7 @@ static HANDLE _find_first_active_menu_buffer()
 
 static void _clear_buffer(HANDLE hBuffer)
 {
+    _lwrite_string(hBuffer, RESET_MOUSE_POSITION); // cursor reset
     _lwrite_string(hBuffer, CLEAR_SCREEN); // clear visible screen
     _lwrite_string(hBuffer, CLEAR_SCROLL_BUFFER); // clear scrollback
 }
@@ -606,7 +607,6 @@ static void _show_error_and_wait_extended(MENU menu)
                             _draw_at_position(_hError, 0, 0, error_message, menu_size.X, menu_size.Y, current_size.X, current_size.Y);
                         }
                 }
-
         }
     _clear_buffer(_hError);
     FlushConsoleInputBuffer(hStdin); // makes sure that no input will affect the menu after the error gets off
@@ -779,7 +779,7 @@ static void _renderMenu(const MENU used_menu)
                                                                         break;
 
                                                                     case VK_RETURN: // ENTER
-                                                                        if (used_menu->options[used_menu->selected_index]->callback && used_menu->options[used_menu->selected_index]->callback != NULL)
+                                                                        if (used_menu->selected_index >= 0 && used_menu->options[used_menu->selected_index]->callback && used_menu->options[used_menu->selected_index]->callback != NULL)
                                                                             {
                                                                             input_handler:
                                                                                 ;
@@ -795,6 +795,7 @@ static void _renderMenu(const MENU used_menu)
                                                                                         if (_size_check(used_menu, FALSE, 0)) _show_error_and_wait_extended(used_menu);
                                                                                         else
                                                                                             {
+                                                                                                fflush(stdin);
                                                                                                 _setConsoleActiveScreenBuffer(hBackBuffer);
                                                                                                 _block_input(&old_mode);
                                                                                                 _reset_mouse_state(); // resetting the mouse state because Windows is stupid (or me)
