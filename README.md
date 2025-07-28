@@ -20,7 +20,6 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 - Easy to use!
 - **New: Advanced color customization** (v0.9.2 BETA)
 - **New: Default settings configuration** (v0.9.2 BETA)
-- **New: Menu color customization** (v0.9.2 BETA)
 
 ## Installation
 
@@ -37,6 +36,18 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 - Standard Windows libraries
 - Console supporting ANSI escape codes (Windows 10+)
 
+## Included Libraries in Implementation
+The library implementation (`menu.c`) includes the following essential headers:
+
+```c
+#include <stdio.h>    // standard I/O operations
+#include <stdlib.h>   // memory allocation, exit()
+#include <windows.h>  // windows API functions
+#include <string.h>   // string manipulation
+#include <stdarg.h>   // variable argument handling
+#include <time.h>     // timing functions
+```
+
 ## Usage
 
 ### Basic Setup
@@ -48,22 +59,23 @@ void menu_callback(MENU menu, dpointer data)
 {
     char* message = (char*)data;
     printf("%s\n", message);
+    getchar();
 }
 
 int main()
 {
     MENU main_menu = create_menu();
-    
+
     // create menu items with associated data
     add_option(main_menu, create_menu_item("Option 1", menu_callback, "First option selected"));
     add_option(main_menu, create_menu_item("Option 2", menu_callback, "Second option selected"));
-    
+
     change_header(main_menu, "MAIN MENU");
     change_footer(main_menu, "Navigate with arrow keys or mouse");
-    
+
     // enable mouse support
     toggle_mouse(main_menu);
-    
+
     enable_menu(main_menu);
 }
 ```
@@ -206,23 +218,13 @@ BACKGROUND + FOREGROUND
 ```
 
 Example:
-```markdown
-// yellow background with blue text
-custom_colors->footerColor = YELLOW_BG BLUE_TEXT;
-
-// bright red background with white text
-custom_colors->headerColor = BRIGHT_RED_BG WHITE_TEXT;
-```
-
-### Adding Text Styles
-You can also add text styles to your color combinations:
 
 ```markdown
 // underlined text on green background
 custom_colors->headerColor = GREEN_BG WHITE_TEXT UNDERLINE_TEXT;
 
-// bold yellow text on dark blue background
-custom_colors->footerColor = DARK_BLUE_BG BOLD_TEXT YELLOW_TEXT;
+// bold yellow text on blue background
+custom_colors->footerColor = BLUE_BG BOLD_TEXT YELLOW_TEXT;
 ```
 
 Available text styles:
@@ -262,7 +264,6 @@ The library includes some predefined color combinations:
 ## Example with Colors and Custom Settings
 
 ```c
-#include <stdio.h>
 #include "menu.h"
 
 typedef struct
@@ -276,6 +277,7 @@ void file_callback(MENU menu, dpointer data)
     MenuData* file_data = (MenuData*)data;
     printf("Selected file option: %s (ID: %d)\n", 
            file_data->name, file_data->id);
+    getchar();
 }
 
 // ... other callbacks ...
@@ -290,7 +292,7 @@ int main()
     // create custom colors
     MENU_COLOR custom_colors = create_color_object();
     custom_colors->headerColor = BRIGHT_RED_BG_WHITE_TEXT;
-    custom_colors->footerColor = GREEN_BG_BLACK_TEXT;
+    custom_colors->footerColor = MAGENTA_BG_WHITE_TEXT;
     set_default_color_object(custom_colors);
 
     MENU main_menu = create_menu();
@@ -317,10 +319,12 @@ gcc <your_app.c> menu.c -o your_app
 
 - Added advanced color customization system
 - Implemented default settings configuration
-- Reduced resource consumption by a lot (v0.9.1)
+- Improved buffer management
+- Optimized error handling
+- Fixed switching to the console 
+- Reduced resource consumption by 5 times (v0.9.1)
 - Improved performance (20x faster rendering) (v0.9.1)
 - Fixed mouse input handling issues (v0.9.1)
-- Improved buffer management
 
 ## Limitations
 
