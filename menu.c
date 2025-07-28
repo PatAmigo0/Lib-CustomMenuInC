@@ -24,9 +24,10 @@ static COORD cached_size = {0, 0}; // saved screen size after the last _size_che
 static HANDLE hConsole, hConsoleError, hCurrent, _hError, hStdin; // cached handlers
 static CONSOLE_SCREEN_BUFFER_INFO hBack_csbi; // cached csbi
 
-BYTE menu_settings_initialized = 0;
+BYTE menu_settings_initialized = 0, menu_color_initialized = 0;
 
 MENU_SETTINGS MENU_DEFAULT_SETTINGS;
+MENU_COLOR MENU_DEFAULT_COLOR;
 
 // dummy values
 static INPUT input = {0};
@@ -39,12 +40,12 @@ static MENU* menus_array = NULL;
 static int menus_amount = 0;
 
 const char* error_message =
-    ERROR_COLOR
+    BRIGHT_RED_TEXT
     "Error: Console window size is too small!\n"
     "Required size: %d x %d\n"
     "Current size: %d x %d\n"
     "Make window bigger."
-    RESET;
+    RESET_ALL_STYLES;
 
 struct __menu_item
 {
@@ -70,6 +71,8 @@ struct __menu
 
     COORD current_size;
 
+    MENU_COLOR color_object;
+
     int footer_policy;
     int header_policy;
 
@@ -80,6 +83,8 @@ struct __menu
 }; // protecting menu
 
 // restricted functions prototypes
+static MENU_SETTINGS _create_default_settings();
+static MENU_COLOR _create_default_color();
 static unsigned long long _random_uint64_t();
 static void _init_menu_system();
 static void _init_hError();
@@ -94,6 +99,7 @@ static void _getMenuSize(MENU menu);
 static BYTE _size_check(MENU menu, BYTE show_error, int extra_value);
 static void _initWindow(SMALL_RECT* restrict window, COORD size);
 static void _clear_buffer(HANDLE hBuffer);
+static void _reset_mouse_state();
 static int _check_menu(unsigned long long saved_id);
 static void _block_input(DWORD* oldMode);
 static void _renderMenu(const MENU used_menu);
@@ -126,10 +132,24 @@ void toggle_mouse(MENU restrict menu_to_change)
     menu_to_change->mouse_enabled = menu_to_change->mouse_enabled ^ 1;
 }
 
-void set_new_default_settings(MENU_SETTINGS new_settings)
+void set_default_menu_settings(MENU_SETTINGS new_settings)
 {
-    menu_settings_initialized = 1;
+	if (menu_settings_initialized) free(MENU_DEFAULT_SETTINGS);
+	else menu_settings_initialized = 1;
     MENU_DEFAULT_SETTINGS = new_settings;
+}
+
+void set_color_object(MENU menu, MENU_COLOR color_object)
+{
+    free(menu->color_object);
+    menu->color_object = color_object;
+}
+
+void set_default_color_object(MENU_COLOR color_object)
+{
+	if (menu_color_initialized) free(MENU_DEFAULT_COLOR);
+	else menu_color_initialized = 1;
+	MENU_DEFAULT_COLOR = color_object;
 }
 
 MENU create_menu()
@@ -144,7 +164,7 @@ MENU create_menu()
 
     memset(new_menu, 0, sizeof(struct __menu));
     new_menu->count = 0;
-    new_menu->mouse_enabled = MENU_DEFAULT_SETTINGS.mouse_enabled;
+    new_menu->mouse_enabled = MENU_DEFAULT_SETTINGS->mouse_enabled;
     new_menu->options = NULL;
     new_menu->running = 0;
     new_menu->active_buffer = 0;
@@ -153,6 +173,8 @@ MENU create_menu()
     new_menu->header_policy = 1;
     new_menu->width_policy = 1;
     new_menu->__ID = _random_uint64_t();
+
+    new_menu->color_object = create_color_object();
 
     new_menu->hBuffer[0] = _createConsoleScreenBuffer();
     new_menu->hBuffer[1] = _createConsoleScreenBuffer();
@@ -183,6 +205,25 @@ MENU_ITEM create_menu_item(const char* restrict text, menu_callback callback, vo
     item->callback = callback;
     item->data_chunk = callback_data;
     return item;
+}
+
+MENU_SETTINGS create_new_settings()
+{
+    MENU_SETTINGS new_settings = (MENU_SETTINGS)calloc(1, sizeof(struct __menu_settings));
+    memset(new_settings, 0, sizeof(struct __menu_settings));
+    return new_settings;
+}
+
+MENU_COLOR create_color_object()
+{
+	if (menu_color_initialized ^ 1) _init_menu_system();
+	
+    MENU_COLOR new_color_object = (MENU_COLOR)calloc(1, sizeof(struct __menu_color_object));
+
+    new_color_object->headerColor = MENU_DEFAULT_COLOR->headerColor;
+    new_color_object->footerColor = MENU_DEFAULT_COLOR->footerColor;
+
+    return new_color_object;
 }
 
 int add_option(MENU used_menu, const MENU_ITEM restrict item)
@@ -270,6 +311,9 @@ void clear_menu(MENU menu_to_clear)
                         free(m->options);
                         m->options = NULL;
                     }
+
+                free(m->color_object);
+
                 if (m->hBuffer[0] != INVALID_HANDLE_VALUE) CloseHandle(m->hBuffer[0]);
                 if (m->hBuffer[1] != INVALID_HANDLE_VALUE) CloseHandle(m->hBuffer[1]);
                 m->running = FALSE;
@@ -301,12 +345,32 @@ void clear_menus()
 void clear_menus_and_exit()
 {
     while(menus_amount > 0) clear_menu(menus_array[0]);
+    free(MENU_DEFAULT_SETTINGS);
+    free(MENU_DEFAULT_COLOR);
     exit(0);
 }
 
 /*
     RESTRICTED ACCESS
 */
+static MENU_COLOR _create_default_color()
+{
+    MENU_COLOR new_color_object = (MENU_COLOR)calloc(1, sizeof(struct __menu_color_object));
+
+    /* defaults */
+    new_color_object->headerColor = DARK_BLUE_BG_WHITE_TEXT;
+    new_color_object->footerColor = CYAN_BG_BLACK_TEXT;
+    /*          */
+
+    return new_color_object;
+}
+
+static MENU_SETTINGS _create_default_settings()
+{
+	MENU_SETTINGS new_settings = create_new_settings();
+	return new_settings;
+}
+
 static unsigned long long _random_uint64_t()
 {
     return ((unsigned long long)rand() << 32) | rand();
@@ -320,15 +384,13 @@ static void _init_menu_system()
     hCurrent = hConsole;
     _init_hError();
 
+    // dummy value initialization
     input.type = INPUT_MOUSE;
     input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
 
-    if (menu_settings_initialized ^ 1)
-        {
-            /* DEFAULT SETTINGS */
-            MENU_DEFAULT_SETTINGS.mouse_enabled = 0;
-            menu_settings_initialized = 1;
-        }
+    if (menu_settings_initialized ^ 1) set_default_menu_settings(_create_default_settings());
+
+    if (menu_color_initialized ^ 1) set_default_color_object(_create_default_color());
 
     srand(time(NULL));
 }
@@ -446,17 +508,6 @@ static HANDLE _find_first_active_menu_buffer()
 
 static void _clear_buffer(HANDLE hBuffer)
 {
-    // static CONSOLE_SCREEN_BUFFER_INFO clr_csbi;
-    // static DWORD cell_count = 0;
-
-    // if (GetConsoleScreenBufferInfo(hBuffer, &clr_csbi))
-    // {
-    //COORD bufferSize = clr_csbi.dwSize;
-    // cell_count = bufferSize.X * bufferSize.Y;
-
-    // FillConsoleOutputCharacter(hBuffer, ' ', cell_count, zero_point, &written);
-    // FillConsoleOutputAttribute(hBuffer, clr_csbi.wAttributes, cell_count, zero_point, &written);
-    // }
     _lwrite_string(hBuffer, "\x1b[2J");
 }
 
@@ -585,11 +636,11 @@ static void _renderMenu(const MENU used_menu)
     _block_input(&old_mode);
 
     char header[BUFFER_CAPACITY];
-    snprintf(header, sizeof(header), HEADER "%*s%s%*s" RESET,
+    snprintf(header, sizeof(header), "%s%*s%s%*s" RESET_ALL_STYLES, used_menu->color_object->headerColor,
              spaces, "", used_menu->header, spaces, "");
 
     char footer[BUFFER_CAPACITY];
-    snprintf(footer, sizeof(footer), SUBHEADER " %-*s " RESET,
+    snprintf(footer, sizeof(footer), "%s %-*s " RESET_ALL_STYLES, used_menu->color_object->footerColor,
              menu_size.X - 4, used_menu->footer);
 
     // pre-render checks
@@ -633,7 +684,7 @@ static void _renderMenu(const MENU used_menu)
                     SetConsoleScreenBufferSize(used_menu->hBuffer[1], current_size);
                     SetConsoleWindowInfo(used_menu->hBuffer[0], TRUE, &new_window);
                     SetConsoleWindowInfo(used_menu->hBuffer[1], TRUE, &new_window);
-                    FlushConsoleInputBuffer(hStdin);
+                    FlushConsoleInputBuffer(hStdin); // so we wont have events recursion -.-
                     used_menu->need_redraw = 1;
                 }
 
@@ -665,7 +716,7 @@ static void _renderMenu(const MENU used_menu)
                     for (i = 0; i < used_menu->count; i++, y++)
                         {
                             format = (i == used_menu->selected_index) ?
-                                     HIGHLIGHT "%s" RESET : "%s";
+                                     WHITE_BG_BLACK_TEXT "%s" RESET_ALL_STYLES : "%s";
                             _draw_at_position(hBackBuffer, x, y, format, used_menu->options[i]->text);
                             used_menu->options[i]->boundaries.Y = y;
                             used_menu->options[i]->boundaries.X = x + used_menu->options[i]->text_len - 1;
