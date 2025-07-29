@@ -5,6 +5,8 @@
 #include <time.h>
 #include "menu.h"
 
+#define DEBUG
+
 #define MAX_SIZE 5
 #define MAX 10
 #define NUMBER_LIMIT 1000
@@ -569,13 +571,13 @@ void menu2_item_1()
     fflush(stdin);
 
     select_sort_type_arrays(new_generated_array, n);
-    free(new_generated_array);
+    free((void*)new_generated_array);
 }
 
 void menu2_item_2(MENU m)
 {
     clear_menu(m); // clearing menu at the start, wont break because system handles that
-    
+
     fflush(stdin);
     int n, blocked = 0;
     printf("Please enter how much values you want to enter: ");
@@ -620,6 +622,7 @@ void menu2_item_2(MENU m)
 void menu1_item_1()
 {
     MENU new_menu = create_menu();
+
     change_header(new_menu, "Array control panel");
     change_menu_policy(new_menu, 1, 0);
     add_option(new_menu, create_menu_item("Generate random array", menu2_item_1, NULL));
@@ -652,23 +655,23 @@ void menu1_item_3()
 
 void exit_menu()
 {
-	clear_menus_and_exit();
+    clear_menus_and_exit();
 }
 
 int main()
 {
-	MENU_SETTINGS new_settings = create_new_settings();
-	new_settings->mouse_enabled = 1;
-	set_default_menu_settings(new_settings);
-	
-	MENU_COLOR new_color = create_color_object();
-	new_color->headerColor = GREEN_BG_WHITE_TEXT;
-	new_color->footerColor = YELLOW_BG BLUE_TEXT;
-	set_default_color_object(new_color);
+    MENU_SETTINGS new_settings = create_new_settings();
+    new_settings.mouse_enabled = 1;
+    set_default_menu_settings(new_settings); // now every menu is having this by default
+
+    MENU_COLOR new_color = create_color_object();
+    strcpy(new_color.headerColor, MAGENTA_BG WHITE_TEXT);
+    new_full_rgb_color(rgb(45, 230, 0), rgb(143, 32, 255), new_color.footerColor);
+    set_default_color_object(new_color); // now every menu is having this by default
 
     SEED = time(NULL);
     MENU new_menu = create_menu();
-    
+
     add_option(new_menu, create_menu_item("Sort array", menu1_item_1, NULL));
     add_option(new_menu, create_menu_item("Sort matrix", menu1_item_2, NULL));
     add_option(new_menu, create_menu_item("Sort file by date", menu1_item_3, NULL));
