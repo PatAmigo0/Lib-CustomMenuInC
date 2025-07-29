@@ -25,6 +25,10 @@
 #ifndef _TIME_H_
 #include <time.h>
 #endif
+
+#ifndef _PSAPI_H_
+	#include <psapi.h>
+#endif
 /* end */
 
 /* COLOR DEFINITIONS */
@@ -97,6 +101,9 @@
 #define CLEAR_SCREEN "\x1b[2J"
 #define CLEAR_SCROLL_BUFFER "\x1b[3J"
 
+// types
+typedef char* RGB_COLOR_SEQ;
+
 struct __menu_item;
 struct __menu;
 struct __menu_settings
@@ -115,7 +122,12 @@ typedef struct __menu* MENU;
 typedef void (*__menu_callback)(MENU, void*);
 typedef void* dpointer;
 typedef struct __menu_settings* MENU_SETTINGS;
-typedef struct __menu_color_object* MENU_COLOR;
+typedef struct __menu_color_object MENU_COLOR;
+
+typedef struct
+{
+	short r, g, b;
+} MENU_RGB_COLOR;
 
 // function prototypes
 double tick();
@@ -131,6 +143,9 @@ MENU create_menu();
 MENU_ITEM create_menu_item(const char* restrict text, __menu_callback callback, void* callback_data);
 MENU_SETTINGS create_new_settings();
 MENU_COLOR create_color_object();
+MENU_RGB_COLOR rgb(short r, short g, short b);
+RGB_COLOR_SEQ new_rgb_color(int text_color, MENU_RGB_COLOR color);
+RGB_COLOR_SEQ new_full_rgb_color(MENU_RGB_COLOR color_fr, MENU_RGB_COLOR color_bg);
 int add_option(MENU used_menu, const MENU_ITEM item);
 void change_header(MENU used_menu, const char* restrict text);
 void change_footer(MENU used_menu, const char* restrict text);
