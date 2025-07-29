@@ -3,23 +3,23 @@
 This lightweight library provides a simple, easy-to-use menu system for Windows console applications. It features customizable menus, keyboard and mouse navigation, and a clean abstraction layer.
 
 ## Version
-```0.9.2 BETA```
+```0.9.3 BETA```
 
 ## Features
 
 - **Windows-only implementation** (uses Windows API)
-- Customizable headers and footers
+- Customizable headers and footers texts
 - Colorful menu options with highlighting
 - Keyboard navigation (arrow keys + Enter)
-- Mouse support (toggle on/off)
+- Mouse navigation (toggleable)
+- Advanced color customization with macros / rgb colors
+- Default settings configuration
 - Double buffering for smooth rendering
 - Callback functions with data passing
 - Dynamically centers the menu in the console
 - Clear abstraction layer
 - Safe memory management
 - Easy to use!
-- **New: Advanced color customization** (v0.9.2 BETA)
-- **New: Default settings configuration** (v0.9.2 BETA)
 
 ## Installation
 
@@ -125,14 +125,14 @@ int main()
 13. **`void toggle_mouse(MENU menu)`**  
     Toggles mouse input support.
 
-### Configuration (New in v0.9.2 BETA)
+### Configuration
 14. **`MENU_SETTINGS create_new_settings()`**  
     Creates a new settings object with default values.
 
 15. **`void set_default_menu_settings(MENU_SETTINGS settings)`**  
     Sets default settings for new menus.
 
-### Color Management (New in v0.9.2 BETA)
+### Color Management
 16. **`MENU_COLOR create_color_object()`**  
     Creates a new color object with default colors.
 
@@ -142,34 +142,71 @@ int main()
 18. **`void set_default_color_object(MENU_COLOR color_object)`**  
     Sets default color scheme for new menus.
 
+### RGB Color Functions (New in v0.9.3 BETA)
+19. **`MENU_RGB_COLOR rgb(short r, short g, short b)`**  
+    Creates an RGB color object with specified components (0-255).
+
+20. **`void new_rgb_color(int text_color, MENU_RGB_COLOR color, char output[MAX_RGB_LEN])`**  
+    Generates ANSI escape sequence for a single RGB color.  
+    - `text_color`: 1 for foreground, 0 for background  
+    - `color`: RGB color to convert  
+    - `output`: Buffer to store the sequence (MAX_RGB_LEN = 45)
+
+21. **`void new_full_rgb_color(MENU_RGB_COLOR fg, MENU_RGB_COLOR bg, char output[MAX_RGB_LEN])`**  
+    Generates ANSI sequence for both foreground and background RGB colors.  
+    - `fg`: Foreground RGB color  
+    - `bg`: Background RGB color  
+    - `output`: Buffer to store the sequence (MAX_RGB_LEN = 45)
+
 ### Information Getters
-19. **`int get_menu_options_amount(MENU menu)`**  
+22. **`int get_menu_options_amount(MENU menu)`**  
     Returns number of options in menu.
 
-20. **`int is_menu_running(MENU menu)`**  
+23. **`int is_menu_running(MENU menu)`**  
     Returns 1 if menu is active, 0 otherwise.
 
-21. **`int get_menu_selected_index(MENU menu)`**  
+24. **`int get_menu_selected_index(MENU menu)`**  
     Returns currently selected index.
 
-22. **`const char* get_menu_header(MENU menu)`**  
+25. **`const char* get_menu_header(MENU menu)`**  
     Returns current header text.
 
-23. **`const char* get_menu_footer(MENU menu)`**  
+26. **`const char* get_menu_footer(MENU menu)`**  
     Returns current footer text.
 
-24. **`int get_menu_header_policy(MENU menu)`**  
+27. **`int get_menu_header_policy(MENU menu)`**  
     Returns header visibility status.
 
-25. **`int get_menu_footer_policy(MENU menu)`**  
+28. **`int get_menu_footer_policy(MENU menu)`**  
     Returns footer visibility status.
 
-26. **`int get_menu_width_policy(MENU menu)`**  
+29. **`int get_menu_width_policy(MENU menu)`**  
     Returns width policy status.
 
 ## Color Customization
 
-The library supports extensive color customization through ANSI escape codes. You can create custom color combinations for headers and footers by combining foreground and background colors.
+The library supports extensive color customization through ANSI escape codes, including both predefined macros and RGB color creation.
+
+### RGB Color Functions (New in v0.9.3 BETA)
+Create custom colors using RGB values (0-255):
+
+```c
+// create RGB colors
+MENU_RGB_COLOR custom_fg = rgb(255, 200, 0);  // gold text
+MENU_RGB_COLOR custom_bg = rgb(30, 30, 100);  // dark blue background
+
+// generate sequences
+char fg_seq[MAX_RGB_SEQ_LEN];
+char bg_seq[MAX_RGB_SEQ_LEN];
+char full_seq[MAX_RGB_DOUBLE_SEQ_LEN];
+
+// create individual sequences
+new_rgb_color(1, custom_fg, fg_seq);   // text color
+new_rgb_color(0, custom_bg, bg_seq);   // bg color
+
+// create combined sequence
+new_full_rgb_color(custom_fg, custom_bg, full_seq);
+```
 
 ### Basic Color Macros
 The library provides predefined color macros:
@@ -214,17 +251,17 @@ The library provides predefined color macros:
 You can combine foreground and background colors by concatenating the macros. The general format is:
 
 ```
-BACKGROUND + FOREGROUND
+strcpy(destination, BACKGROUND FOREGROUND);
 ```
 
 Example:
 
-```markdown
+```c
 // underlined text on green background
-custom_colors->headerColor = GREEN_BG WHITE_TEXT UNDERLINE_TEXT;
+strcpy(custom_colors.headerColor, GREEN_BG WHITE_TEXT UNDERLINE_TEXT);
 
 // bold yellow text on blue background
-custom_colors->footerColor = BLUE_BG BOLD_TEXT YELLOW_TEXT;
+strcpy(custom_colors.footerColor, BLUE_BG BOLD_TEXT YELLOW_TEXT);
 ```
 
 Available text styles:
@@ -240,26 +277,26 @@ Available text styles:
 ### Predefined Combinations
 The library includes some predefined color combinations:
 
-1. `DARK_BLUE_BG_WHITE_TEXT`  
-   ![Dark Blue BG with White Text](https://placehold.co/200x40/00008B/FFFFFF?text=Dark+Blue+BG+White+Text)
+- `DARK_BLUE_BG_WHITE_TEXT`  
+  Dark Blue BG with White Text
 
-2. `CYAN_BG_BLACK_TEXT`  
-   ![Cyan BG with Black Text](https://placehold.co/200x40/00FFFF/000000?text=Cyan+BG+Black+Text)
+- `CYAN_BG_BLACK_TEXT`  
+  Cyan BG with Black Text
 
-3. `WHITE_BG_BLACK_TEXT`  
-   ![White BG with Black Text](https://placehold.co/200x40/FFFFFF/000000?text=White+BG+Black+Text)
+- `WHITE_BG_BLACK_TEXT`  
+  White BG with Black Text
 
-4. `GREEN_BG_WHITE_TEXT`  
-   ![Green BG with White Text](https://placehold.co/200x40/008000/FFFFFF?text=Green+BG+White+Text)
+- `GREEN_BG_WHITE_TEXT`  
+  Green BG with White Text
 
-5. `RED_BG_WHITE_TEXT`  
-   ![Red BG with White Text](https://placehold.co/200x40/FF0000/FFFFFF?text=Red+BG+White+Text)
+- `RED_BG_WHITE_TEXT`  
+  Red BG with White Text
 
-6. `YELLOW_BG_BLACK_TEXT`  
-   ![Yellow BG with Black Text](https://placehold.co/200x40/FFFF00/000000?text=Yellow+BG+Black+Text)
+- `YELLOW_BG_BLACK_TEXT`  
+  Yellow BG with Black Text
 
-7. `BRIGHT_RED_BG_WHITE_TEXT`  
-   ![Bright Red BG with White Text](https://placehold.co/200x40/FF3333/FFFFFF?text=Bright+Red+BG+White+Text)
+- `BRIGHT_RED_BG_WHITE_TEXT`  
+  Bright Red BG with White Text
 
 ## Example with Colors and Custom Settings
 
@@ -286,13 +323,13 @@ int main()
 {
     // create custom settings
     MENU_SETTINGS custom_settings = create_new_settings();
-    custom_settings->mouse_enabled = 1;
+    custom_settings.mouse_enabled = 1;
     set_default_menu_settings(custom_settings);
 
     // create custom colors
     MENU_COLOR custom_colors = create_color_object();
-    custom_colors->headerColor = BRIGHT_RED_BG_WHITE_TEXT;
-    custom_colors->footerColor = MAGENTA_BG_WHITE_TEXT;
+    strcpy(custom_colors.headerColor, MAGENTA_BG WHITE_TEXT); // for pre-defined styles use this
+    new_full_rgb_color(rgb(45, 230, 0), rgb(143, 32, 255), custom_colors.footerColor); // for rgb use this
     set_default_color_object(custom_colors);
 
     MENU main_menu = create_menu();
@@ -315,19 +352,32 @@ Compile with your project:
 gcc <your_app.c> menu.c -o your_app
 ```
 
-## Key Updates (v0.9.2 BETA)
+## Key Updates
 
+### v0.9.3 BETA
+- Implemented RGB color support for the menu
+- Fixed critical memory management bugs
+- Most implementations have been changed to use stack memory instead of heap
+- Improved error handling robustness
+- Addressed window resizing edge cases
+- Optimized mouse event processing
+- Fixed callback execution context issues
+- Overall optimizations
+
+### v0.9.2 BETA
 - Added advanced color customization system
 - Implemented default settings configuration
 - Improved buffer management
 - Optimized error handling
 - Fixed switching to the console 
-- Reduced resource consumption by 5 times (v0.9.1)
-- Improved performance (20x faster rendering) (v0.9.1)
-- Fixed mouse input handling issues (v0.9.1)
+
+### v0.9.1 BETA
+- Reduced resource consumption by 5 times
+- Improved performance (20x faster rendering)
+- Fixed mouse input handling issues
+- Overall buug fixes
 
 ## Limitations
-
 - Windows-only implementation
 - Requires console supporting ANSI escape codes (Windows 10+)
 - Console resize handling has minimum size requirements
@@ -336,8 +386,19 @@ gcc <your_app.c> menu.c -o your_app
 
 *Planned for future versions: Horizontal menus, improved resize handling*
 
+## Important Notes
+
+1. **Memory Management**  
+   The MENU is a dynamically allocated memory. Always use `clear_menu()` to destroy menus - direct `free()` calls will cause memory leaks
+
+2. **Thread Safety**  
+   This library is not thread-safe. Call all menu functions from the main thread (subject to change in the future if there are any requests)
+
+3. **Item Lifetime**  
+   Never create pointers to `MENU_ITEM` objects (RESTRICTED PARAM)
+
 ## Contributing
 
 Contributions are welcome! Please submit pull requests or open issues on GitHub.
 
-> **Important**: Never create a pointer to a `MENU_ITEM` created via `create_menu_item()` (RESTRICTED PARAM).
+> **Critical Restriction**: Never create a persistent pointer to a `MENU_ITEM` created via `create_menu_item()`. These objects are managed internally by the library and direct access may cause memory corruption.

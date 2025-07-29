@@ -1,9 +1,8 @@
 #include "menu.h"
 
-#define DEBUG
+// #define DEBUG
 
 #define DISABLED -1
-
 #define BUFFER_CAPACITY 128
 #define UPDATE_FREQUENCE 2147483647 // ms
 #define ERROR_UPDATE_FREQUENCE 20 // ms
@@ -16,8 +15,11 @@
 #define DEFAULT_MENU_TEXT "Unnamed Option"
 
 #define LOG_FILE_NAME "menu_log.txt"
+#define RGB_COLOR_SEQUENCE "\x1b[%d;2;%d;%d;%dm"
+#define RGB_COLOR_DOUBLE_SEQUENCE "\x1b[38;2;%hd;%hd;%hdm\x1b[48;2;%hd;%hd;%hdm"
 
 // error codes defines
+#define BAD_CALLOC 138
 #define BAD_REALLOC 134
 #define BAD_MENU 253
 
@@ -87,6 +89,9 @@ struct __menu
 }; // protecting menu
 
 // restricted functions prototypes
+#ifdef DEBUG
+void _print_memory_info(HANDLE hBuffer);
+#endif
 static void* _safe_malloc(size_t _size);
 static void* _safe_realloc(void* _mem_to_realloc, size_t _size);
 static MENU_SETTINGS _create_default_settings();
@@ -140,22 +145,19 @@ void toggle_mouse(MENU restrict menu_to_change)
 
 void set_default_menu_settings(MENU_SETTINGS new_settings)
 {
-    if (menu_settings_initialized) free(MENU_DEFAULT_SETTINGS);
-    else menu_settings_initialized = 1;
-    MENU_DEFAULT_SETTINGS = new_settings;
+    if (menu_settings_initialized ^ 1) menu_settings_initialized = 1;
+    memcpy((void*)&MENU_DEFAULT_SETTINGS, (void*)&new_settings, sizeof(MENU_SETTINGS));
 }
 
 void set_color_object(MENU menu, MENU_COLOR color_object)
 {
-    free(menu->color_object);
-    menu->color_object = color_object;
+    memcpy((void*)&(menu->color_object), (void*)&color_object, sizeof(MENU_COLOR));
 }
 
 void set_default_color_object(MENU_COLOR color_object)
 {
-    if (menu_color_initialized) free(MENU_DEFAULT_COLOR);
-    else menu_color_initialized = 1;
-    MENU_DEFAULT_COLOR = color_object;
+    if (menu_color_initialized ^ 1) menu_color_initialized = 1;
+    memcpy((void*)&MENU_DEFAULT_COLOR, (void*)&color_object, sizeof(MENU_COLOR));
 }
 
 MENU create_menu()
@@ -170,7 +172,7 @@ MENU create_menu()
 
     memset(new_menu, 0, sizeof(struct __menu));
     new_menu->count = 0;
-    new_menu->mouse_enabled = MENU_DEFAULT_SETTINGS->mouse_enabled;
+    new_menu->mouse_enabled = MENU_DEFAULT_SETTINGS.mouse_enabled;
     new_menu->options = NULL;
     new_menu->running = 0;
     new_menu->active_buffer = 0;
@@ -215,8 +217,10 @@ MENU_ITEM create_menu_item(const char* restrict text, __menu_callback callback, 
 
 MENU_SETTINGS create_new_settings()
 {
-    MENU_SETTINGS new_settings = (MENU_SETTINGS)_safe_malloc(sizeof(struct __menu_settings));
-    memset(new_settings, 0, sizeof(struct __menu_settings));
+    MENU_SETTINGS new_settings;
+    memset(&new_settings, 0, sizeof(struct __menu_settings));
+    new_settings.__garbage_collector = TRUE; // its always should be TRUE by default
+
     return new_settings;
 }
 
@@ -224,12 +228,28 @@ MENU_COLOR create_color_object()
 {
     if (menu_color_initialized ^ 1) _init_menu_system();
 
-    MENU_COLOR new_color_object = (MENU_COLOR)_safe_malloc(sizeof(struct __menu_color_object));
-
-    new_color_object->headerColor = MENU_DEFAULT_COLOR->headerColor;
-    new_color_object->footerColor = MENU_DEFAULT_COLOR->footerColor;
+    MENU_COLOR new_color_object;
+    memcpy((void*)&new_color_object, (void*)&MENU_DEFAULT_COLOR, sizeof(MENU_COLOR));
 
     return new_color_object;
+}
+
+MENU_RGB_COLOR rgb(short r, short g, short b)
+{
+    return (MENU_RGB_COLOR)
+    {
+        r, g, b
+    };
+}
+
+void new_rgb_color(int text_color, MENU_RGB_COLOR color, char output[MAX_RGB_LEN])
+{
+    sprintf(output, RGB_COLOR_SEQUENCE, (text_color ? 38 : 48), color.r, color.g, color.b);
+}
+
+void new_full_rgb_color(MENU_RGB_COLOR _color_foreground, MENU_RGB_COLOR _color_background, char output[MAX_RGB_LEN])
+{
+    sprintf(output, RGB_COLOR_DOUBLE_SEQUENCE, _color_foreground.r, _color_foreground.g, _color_foreground.b, _color_background.r, _color_background.g, _color_background.b);
 }
 
 int add_option(MENU used_menu, const MENU_ITEM restrict item)
@@ -289,7 +309,7 @@ void clear_option(MENU used_menu, MENU_ITEM option_to_clear)
                 size_t elements_to_move = used_menu->count - i;
                 if (elements_to_move > 0) memmove(&o[i], &o[i+1], elements_to_move * sizeof(MENU_ITEM));
 
-                used_menu->selected_index = 0;
+                if (used_menu->selected_index >= used_menu->count) used_menu->selected_index--;
                 _getMenuSize(used_menu);
 
                 if (used_menu->count <= 0) clear_menu(used_menu);
@@ -312,7 +332,7 @@ void clear_menu(MENU menu_to_clear)
                         m->options = NULL;
                     }
 
-                free(m->color_object);
+                // free(m->color_object);
 
                 if (m->hBuffer[0] != INVALID_HANDLE_VALUE) CloseHandle(m->hBuffer[0]);
                 if (m->hBuffer[1] != INVALID_HANDLE_VALUE) CloseHandle(m->hBuffer[1]);
@@ -347,8 +367,8 @@ void clear_menus()
 void clear_menus_and_exit()
 {
     while(menus_amount > 0) clear_menu(menus_array[0]);
-    free(MENU_DEFAULT_SETTINGS);
-    free(MENU_DEFAULT_COLOR);
+    // free(MENU_DEFAULT_SETTINGS);
+    // free(MENU_DEFAULT_COLOR);
     exit(0);
 }
 
@@ -357,10 +377,39 @@ void clear_menus_and_exit()
 */
 
 // memory functions
+#ifdef DEBUG
+void _print_memory_info(HANDLE hBuffer)
+{
+    static size_t _s_t = 1024 * 1024;
+    PROCESS_MEMORY_COUNTERS pmc;
+
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc)))
+        {
+            _draw_at_position(hBuffer, 0, 16, "PageFaultCount: %lu", pmc.PageFaultCount);
+            _draw_at_position(hBuffer, 0, 18, "WorkingSetSize: %.5lf MB",
+                              (double)pmc.WorkingSetSize / _s_t);
+            _draw_at_position(hBuffer, 0, 20, "PeakWorkingSetSize: %.5lf MB",
+                              (double)pmc.PeakWorkingSetSize / _s_t);
+            _draw_at_position(hBuffer, 0, 22, "Pagefile Usage: %.5lf MB",
+                              (double)pmc.PagefileUsage / _s_t);
+            _draw_at_position(hBuffer, 0, 24, "PeakPagefile: %.5lf MB",
+                              (double)pmc.PeakPagefileUsage / _s_t);
+            _draw_at_position(hBuffer, 0, 26, "PagedPool: %.5lf MB",
+                              (double)pmc.QuotaPagedPoolUsage / _s_t);
+            _draw_at_position(hBuffer, 0, 28, "NonPagedPool: %.5lf MB",
+                              (double)pmc.QuotaNonPagedPoolUsage / _s_t);
+        }
+
+    static DWORD handleCount = 0;
+    if (GetProcessHandleCount(GetCurrentProcess(), &handleCount))
+            _draw_at_position(hBuffer, 0, 30, "Handles: %lu", handleCount);
+}
+#endif
+
 static void* _safe_malloc(size_t _size)
 {
     void* _new_block_chunk = calloc(1, _size);
-    if (!_new_block_chunk || _new_block_chunk == NULL) exit(BAD_REALLOC);
+    if (!_new_block_chunk || _new_block_chunk == NULL) exit(BAD_CALLOC);
     return _new_block_chunk;
 }
 
@@ -374,13 +423,7 @@ static void* _safe_realloc(void* _mem_to_realloc, size_t _size)
 // utility
 static MENU_COLOR _create_default_color()
 {
-    MENU_COLOR new_color_object = (MENU_COLOR)calloc(1, sizeof(struct __menu_color_object));
-
-    /* defaults */
-    new_color_object->headerColor = DARK_BLUE_BG_WHITE_TEXT;
-    new_color_object->footerColor = CYAN_BG_BLACK_TEXT;
-    /*          */
-
+    MENU_COLOR new_color_object = {DARK_BLUE_BG_WHITE_TEXT, CYAN_BG_BLACK_TEXT};
     return new_color_object;
 }
 
@@ -401,7 +444,6 @@ static HANDLE _createConsoleScreenBuffer()
            );
 }
 
-
 static unsigned long long _random_uint64_t()
 {
     return ((unsigned long long)rand() << 32) | rand();
@@ -421,7 +463,6 @@ static void _init_menu_system()
     input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
 
     if (menu_settings_initialized ^ 1) set_default_menu_settings(_create_default_settings());
-
     if (menu_color_initialized ^ 1) set_default_color_object(_create_default_color());
 
     srand(time(NULL));
@@ -431,7 +472,6 @@ static void _init_hError()
 {
     _hError = _createConsoleScreenBuffer();
 }
-
 
 // write functions
 static void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text)
@@ -466,7 +506,6 @@ static void _draw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char*
     va_end(args);
 }
 */
-
 
 static void _vwrite_string(HANDLE hDestination, const char* restrict text, va_list args)
 {
@@ -599,7 +638,6 @@ static void _show_error_and_wait_extended(MENU menu)
     BYTE running, event_running;
     DWORD objectWait, k, numEvents, oldMode;
 
-
     // pre-start calls
     _block_input(&oldMode);
     _draw_at_position(_hError, 0, 0, error_message, menu_size.X, menu_size.Y, current_size.X, current_size.Y);
@@ -614,7 +652,6 @@ static void _show_error_and_wait_extended(MENU menu)
         error_wait_start:
             ;
             objectWait = WaitForSingleObject(hStdin, UPDATE_FREQUENCE);
-
             if (objectWait == WAIT_OBJECT_0)
                 {
                     GetNumberOfConsoleInputEvents(hStdin, &numEvents);
@@ -700,6 +737,8 @@ static void _renderMenu(const MENU used_menu)
         csbi.srWindow.Right - csbi.srWindow.Left + 1, csbi.srWindow.Bottom - csbi.srWindow.Top + 1
     };
 
+    last_selected_index = selected_index = -1;
+
     menu_size = used_menu->menu_size;
     saved_id = used_menu->__ID;
     mouse_input_enabled = used_menu->mouse_enabled;
@@ -707,9 +746,9 @@ static void _renderMenu(const MENU used_menu)
 
     spaces = (menu_size.X - 6) / 2;
 
-    snprintf(header, sizeof(header), "%s%*s%s%*s" RESET_ALL_STYLES, used_menu->color_object->headerColor,
+    snprintf(header, sizeof(header), "%s%*s%s%*s" RESET_ALL_STYLES, used_menu->color_object.headerColor,
              spaces, "", used_menu->header, spaces, "");
-    snprintf(footer, sizeof(footer), "%s %-*s " RESET_ALL_STYLES, used_menu->color_object->footerColor,
+    snprintf(footer, sizeof(footer), "%s %-*s " RESET_ALL_STYLES, used_menu->color_object.footerColor,
              menu_size.X - 4, used_menu->footer);
 
     // pre-render checks
@@ -768,6 +807,7 @@ static void _renderMenu(const MENU used_menu)
                     _draw_at_position(hBackBuffer, 0, 10, "MOUSE POS: %d %d   ", debug_mouse_pos.X, debug_mouse_pos.Y);
                     _draw_at_position(hBackBuffer, 0, 12, "mouse status: %d", mouse_status);
                     _draw_at_position(hBackBuffer, 0, 14, "menus_amount: %d", menus_amount);
+                    _print_memory_info(hBackBuffer); // -> 22
 #endif
                     start.X = (current_size.X - menu_size.X) / 2;
                     start.Y = (current_size.Y - menu_size.Y) / 2 + FIX_VALUE;
@@ -801,8 +841,6 @@ static void _renderMenu(const MENU used_menu)
                     used_menu->active_buffer ^= 1;
                     used_menu->need_redraw = FALSE;
                 }
-        wait_start:
-            ;
             waitResult = WaitForSingleObject(hStdin, UPDATE_FREQUENCE);
             if (waitResult == WAIT_OBJECT_0)
                 {
@@ -918,7 +956,6 @@ static void _renderMenu(const MENU used_menu)
                                                         }
                                                     else if (inputRecords[event].Event.MouseEvent.dwButtonState == 0) holding = 0;
                                                 }
-                                            else goto wait_start;
                                             break;
                                         case WINDOW_BUFFER_SIZE_EVENT:
                                             current_size = inputRecords[event].Event.WindowBufferSizeEvent.dwSize;
