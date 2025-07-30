@@ -103,6 +103,10 @@
 
 // values
 #define MAX_RGB_LEN 45
+#define DEFAULT_MOUSE_SETTING 0
+#define DEFAULT_HEADER_SETTING 1
+#define DEFAULT_FOOTER_SETTING 1
+#define DEFAULT_WIDTH_SETTING 1
 
 // types
 typedef char* RGB_COLOR_SEQ;
@@ -112,6 +116,9 @@ struct __menu;
 struct __menu_settings
 {
     BYTE mouse_enabled;
+    BYTE header_enabled;
+    BYTE footer_enabled;
+    BYTE double_width_enabled;
     BYTE __garbage_collector;
 };
 
