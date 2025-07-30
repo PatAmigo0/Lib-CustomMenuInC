@@ -177,9 +177,9 @@ MENU create_menu()
     new_menu->running = 0;
     new_menu->active_buffer = 0;
     new_menu->selected_index = 0;
-    new_menu->footer_policy = 1;
-    new_menu->header_policy = 1;
-    new_menu->width_policy = 1;
+    new_menu->footer_policy = MENU_DEFAULT_SETTINGS.footer_enabled;
+    new_menu->header_policy = MENU_DEFAULT_SETTINGS.header_enabled;
+    new_menu->width_policy = MENU_DEFAULT_SETTINGS.double_width_enabled;
     new_menu->__ID = _random_uint64_t();
 
     new_menu->color_object = create_color_object();
@@ -217,9 +217,10 @@ MENU_ITEM create_menu_item(const char* restrict text, __menu_callback callback, 
 
 MENU_SETTINGS create_new_settings()
 {
+    if (menu_settings_initialized ^ 1) _init_menu_system();
+
     MENU_SETTINGS new_settings;
-    memset(&new_settings, 0, sizeof(struct __menu_settings));
-    new_settings.__garbage_collector = TRUE; // its always should be TRUE by default
+    memcpy((void*)&new_settings, (void*)&MENU_DEFAULT_SETTINGS, sizeof(MENU_SETTINGS));
 
     return new_settings;
 }
@@ -367,8 +368,6 @@ void clear_menus()
 void clear_menus_and_exit()
 {
     while(menus_amount > 0) clear_menu(menus_array[0]);
-    // free(MENU_DEFAULT_SETTINGS);
-    // free(MENU_DEFAULT_COLOR);
     exit(0);
 }
 
@@ -402,7 +401,7 @@ void _print_memory_info(HANDLE hBuffer)
 
     static DWORD handleCount = 0;
     if (GetProcessHandleCount(GetCurrentProcess(), &handleCount))
-            _draw_at_position(hBuffer, 0, 30, "Handles: %lu", handleCount);
+        _draw_at_position(hBuffer, 0, 30, "Handles: %lu", handleCount);
 }
 #endif
 
@@ -429,7 +428,13 @@ static MENU_COLOR _create_default_color()
 
 static MENU_SETTINGS _create_default_settings()
 {
-    MENU_SETTINGS new_settings = create_new_settings();
+    MENU_SETTINGS new_settings;
+    memset(&new_settings, 0, sizeof(struct __menu_settings));
+    new_settings.mouse_enabled = DEFAULT_MOUSE_SETTING;
+    new_settings.header_enabled = DEFAULT_HEADER_SETTING;
+    new_settings.footer_enabled = DEFAULT_FOOTER_SETTING;
+    new_settings.double_width_enabled = DEFAULT_WIDTH_SETTING;
+    new_settings.__garbage_collector = TRUE;
     return new_settings;
 }
 
@@ -550,6 +555,9 @@ static BYTE _size_check(MENU menu)
     {
         screen_width, screen_height
     };
+
+    // cached_mouse_pos = hBack_csbi.dwCursorPosition;
+
     return size_error;
 }
 
@@ -865,10 +873,12 @@ static void _renderMenu(const MENU used_menu)
                                                                     case VK_UP:
                                                                         used_menu->selected_index =
                                                                             (used_menu->selected_index - 1 + used_menu->count) % used_menu->count;
+                                                                        last_selected_index = used_menu->selected_index;
                                                                         break;
                                                                     case VK_DOWN:
                                                                         used_menu->selected_index =
                                                                             (used_menu->selected_index + 1) % used_menu->count;
+                                                                        last_selected_index = used_menu->selected_index;
                                                                         break;
                                                                     case VK_RETURN: // ENTER
                                                                         if (used_menu->selected_index >= 0 && used_menu->options[used_menu->selected_index]->callback && used_menu->options[used_menu->selected_index]->callback != NULL)
@@ -880,6 +890,7 @@ static void _renderMenu(const MENU used_menu)
                                                                                 _initWindow(&new_window, current_size);
                                                                                 SetConsoleWindowInfo(hConsole, TRUE, &new_window);
                                                                                 fflush(stdin);
+                                                                                FlushConsoleInputBuffer(hStdin);
 
                                                                                 _clear_buffer(hConsole);
                                                                                 _setConsoleActiveScreenBuffer(hConsole);
@@ -892,9 +903,9 @@ static void _renderMenu(const MENU used_menu)
                                                                                         if (_size_check(used_menu)) _show_error_and_wait_extended(used_menu);
 
                                                                                         current_size = cached_size;
-                                                                                        _setConsoleActiveScreenBuffer(hBackBuffer);
                                                                                         _block_input(&old_mode);
                                                                                         _reset_mouse_state(); // resetting the mouse state because Windows is stupid (or me)
+                                                                                        _setConsoleActiveScreenBuffer(hBackBuffer);
                                                                                     }
                                                                                 else goto end_render_loop;
                                                                             }
@@ -908,7 +919,6 @@ static void _renderMenu(const MENU used_menu)
                                                                         break;
 #endif
                                                                 }
-                                                            last_selected_index = used_menu->selected_index;
                                                             FlushConsoleInputBuffer(hStdin);
                                                         }
                                                 }
@@ -968,14 +978,13 @@ static void _renderMenu(const MENU used_menu)
 end_render_loop:; // anchor
     // cleanup
     FlushConsoleInputBuffer(hStdin);
+    SetConsoleMode(hStdin, old_mode);
     if (menus_amount == 0)
-        {
-            SetConsoleMode(hStdin, old_mode);
-            _setConsoleActiveScreenBuffer(hConsole);
-        }
+        _setConsoleActiveScreenBuffer(hConsole);
     else _setConsoleActiveScreenBuffer(_find_first_active_menu_buffer());
     // free(used_menu); no need for now
 }
+
 
 /* GETTERS */
 int get_menu_options_amount(MENU menu)
