@@ -8,7 +8,7 @@
 #define ERROR_UPDATE_FREQUENCE 20 // ms
 #define EVENT_MAX_RECORDS 4
 
-#define FIX_VALUE 2
+#define OFFSET_VALUE 2
 
 #define DEFAULT_HEADER_TEXT "MENU"
 #define DEFAULT_FOOTER_TEXT "Use arrows to navigate, Enter to select"
@@ -17,11 +17,16 @@
 #define LOG_FILE_NAME "menu_log.txt"
 #define RGB_COLOR_SEQUENCE "\x1b[%d;2;%d;%d;%dm"
 #define RGB_COLOR_DOUBLE_SEQUENCE "\x1b[38;2;%hd;%hd;%hdm\x1b[48;2;%hd;%hd;%hdm"
+#define ERROR_MESSAGE1 "\033[31mError: Console window size is too small!\n""Required size: %d x %d\n"
+#define ERROR_MESSAGE2 "Current size: %d x %d\nMake window bigger.\033[0m"
 
 // error codes defines
 #define BAD_CALLOC 138
 #define BAD_REALLOC 134
 #define BAD_MENU 253
+
+// function macros
+// ...
 
 // cached values
 static COORD zero_point = {0, 0};
@@ -44,14 +49,6 @@ static int holding = 0;
 // menu values
 static MENU* menus_array = NULL;
 static int menus_amount = 0;
-
-const char* error_message =
-    BRIGHT_RED_TEXT
-    "Error: Console window size is too small!\n"
-    "Required size: %d x %d\n"
-    "Current size: %d x %d\n"
-    "Make window bigger."
-    RESET_ALL_STYLES;
 
 struct __menu_item
 {
@@ -384,6 +381,9 @@ void _print_memory_info(HANDLE hBuffer)
 
     if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc)))
         {
+        	DWORD __handleCount = 0;
+            GetProcessHandleCount(GetCurrentProcess(), &__handleCount);
+            
             _draw_at_position(hBuffer, 0, 16, "PageFaultCount: %lu", pmc.PageFaultCount);
             _draw_at_position(hBuffer, 0, 18, "WorkingSetSize: %.5lf MB",
                               (double)pmc.WorkingSetSize / _s_t);
@@ -397,11 +397,8 @@ void _print_memory_info(HANDLE hBuffer)
                               (double)pmc.QuotaPagedPoolUsage / _s_t);
             _draw_at_position(hBuffer, 0, 28, "NonPagedPool: %.5lf MB",
                               (double)pmc.QuotaNonPagedPoolUsage / _s_t);
+            _draw_at_position(hBuffer, 0, 30, "Handles: %lu", __handleCount);
         }
-
-    static DWORD handleCount = 0;
-    if (GetProcessHandleCount(GetCurrentProcess(), &handleCount))
-        _draw_at_position(hBuffer, 0, 30, "Handles: %lu", handleCount);
 }
 #endif
 
@@ -646,9 +643,14 @@ static void _show_error_and_wait_extended(MENU menu)
     BYTE running, event_running;
     DWORD objectWait, k, numEvents, oldMode;
 
+    // error message intialization
+    char error_message[BUFFER_CAPACITY];
+    sprintf(error_message, ERROR_MESSAGE1, menu_size.X, menu_size.Y);
+    strcat(error_message, ERROR_MESSAGE2);
+
     // pre-start calls
     _block_input(&oldMode);
-    _draw_at_position(_hError, 0, 0, error_message, menu_size.X, menu_size.Y, current_size.X, current_size.Y);
+    _draw_at_position(_hError, 0, 0, error_message, current_size.X, current_size.Y);
     _setConsoleActiveScreenBuffer(_hError);
     FlushConsoleInputBuffer(hStdin);
     SetConsoleScreenBufferSize(_hError, menu_size);
@@ -680,7 +682,7 @@ static void _show_error_and_wait_extended(MENU menu)
                     else
                         {
                             _clear_buffer(_hError);
-                            _draw_at_position(_hError, 0, 0, error_message, menu_size.X, menu_size.Y, current_size.X, current_size.Y);
+                            _draw_at_position(_hError, 0, 0, error_message, current_size.X, current_size.Y);
                         }
                 }
         }
@@ -818,7 +820,7 @@ static void _renderMenu(const MENU used_menu)
                     _print_memory_info(hBackBuffer); // -> 22
 #endif
                     start.X = (current_size.X - menu_size.X) / 2;
-                    start.Y = (current_size.Y - menu_size.Y) / 2 + FIX_VALUE;
+                    start.Y = (current_size.Y - menu_size.Y) / 2 + OFFSET_VALUE;
 
                     // header
                     if (used_menu->header_policy)
