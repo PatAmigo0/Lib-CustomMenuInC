@@ -168,7 +168,6 @@ void set_default_color_object(MENU_COLOR color_object);
 void enable_menu(MENU used_menu);
 void clear_option(MENU used_menu, MENU_ITEM option_to_clear);
 void change_menu_policy(MENU menu_to_change, int new_header_policy, int new_footer_policy);
-void change_width_policy(MENU menu_to_change, int new_width_policy);
 void clear_menu(MENU menu_to_clear);
 void clear_menus();
 void clear_menus_and_exit();

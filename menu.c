@@ -130,11 +130,6 @@ void change_menu_policy(MENU restrict menu_to_change, int new_header_policy, int
     menu_to_change->footer_policy = (new_footer_policy && 1) || 0;
 }
 
-void change_width_policy(MENU restrict menu_to_change, int new_width_policy)
-{
-    menu_to_change->width_policy = (new_width_policy && 1) || 0;
-}
-
 void toggle_mouse(MENU restrict menu_to_change)
 {
     menu_to_change->mouse_enabled = menu_to_change->mouse_enabled ^ 1;
@@ -381,9 +376,9 @@ void _print_memory_info(HANDLE hBuffer)
 
     if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc)))
         {
-        	DWORD __handleCount = 0;
+            DWORD __handleCount = 0;
             GetProcessHandleCount(GetCurrentProcess(), &__handleCount);
-            
+
             _draw_at_position(hBuffer, 0, 16, "PageFaultCount: %lu", pmc.PageFaultCount);
             _draw_at_position(hBuffer, 0, 18, "WorkingSetSize: %.5lf MB",
                               (double)pmc.WorkingSetSize / _s_t);
@@ -747,22 +742,22 @@ static void _renderMenu(const MENU used_menu)
         csbi.srWindow.Right - csbi.srWindow.Left + 1, csbi.srWindow.Bottom - csbi.srWindow.Top + 1
     };
 
-    last_selected_index = selected_index = -1;
+    last_selected_index = -1;
 
     menu_size = used_menu->menu_size;
     saved_id = used_menu->__ID;
     mouse_input_enabled = used_menu->mouse_enabled;
     used_menu->need_redraw = 1;
 
-    spaces = (menu_size.X - 6) / 2;
+    selected_index = mouse_input_enabled ? -1 : 0;
+	used_menu->selected_index = selected_index;
+
+        spaces = (menu_size.X - 6) / 2;
 
     snprintf(header, sizeof(header), "%s%*s%s%*s" RESET_ALL_STYLES, used_menu->color_object.headerColor,
              spaces, "", used_menu->header, spaces, "");
     snprintf(footer, sizeof(footer), "%s %-*s " RESET_ALL_STYLES, used_menu->color_object.footerColor,
              menu_size.X - 4, used_menu->footer);
-
-    // pre-render checks
-    if (mouse_input_enabled) used_menu->selected_index = DISABLED;
 
     // debug values
 #ifdef DEBUG
