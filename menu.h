@@ -197,7 +197,7 @@ void change_header(MENU used_menu, const char* text);
 void change_footer(MENU used_menu, const char* text);
 
 /* ----- Item Management ----- */
-int add_option(MENU used_menu, const MENU_ITEM item);
+void add_option(MENU used_menu, const MENU_ITEM item);
 void clear_option(MENU used_menu, MENU_ITEM option_to_clear);
 
 /* ----- Color Functions ----- */
