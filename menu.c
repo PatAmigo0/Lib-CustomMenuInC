@@ -37,12 +37,12 @@ static COORD cached_size = {0, 0};
 static HANDLE hConsole, hConsoleError, hCurrent, _hError, hStdin;
 static CONSOLE_SCREEN_BUFFER_INFO hBack_csbi;
 
-static BYTE menu_settings_initialized = 0, menu_color_initialized = 0;
+static BYTE menu_settings_initialized = FALSE, menu_color_initialized = FALSE;
 static MENU_SETTINGS MENU_DEFAULT_SETTINGS;
 static MENU_COLOR MENU_DEFAULT_COLOR;
 
 static INPUT input = {0};
-static BYTE holding = 0;
+static BYTE holding = FALSE;
 
 static MENU* menus_array = NULL;
 static int menus_amount = 0;
@@ -108,7 +108,7 @@ void set_menu_settings(MENU menu, MENU_SETTINGS new_settings)
 
 void set_default_menu_settings(MENU_SETTINGS new_settings)
 {
-    if (menu_settings_initialized ^ 1) menu_settings_initialized = 1;
+    if (menu_settings_initialized ^ TRUE) menu_settings_initialized = TRUE;
     memcpy((void*)&MENU_DEFAULT_SETTINGS, (void*)&new_settings, sizeof(MENU_SETTINGS));
 }
 
@@ -119,28 +119,28 @@ void set_color_object(MENU menu, MENU_COLOR color_object)
 
 void set_default_color_object(MENU_COLOR color_object)
 {
-    if (menu_color_initialized ^ 1) menu_color_initialized = 1;
+    if (menu_color_initialized ^ TRUE) menu_color_initialized = TRUE;
     memcpy((void*)&MENU_DEFAULT_COLOR, (void*)&color_object, sizeof(MENU_COLOR));
 }
 
 /* ----- Menu Creation Functions ----- */
 MENU create_menu()
 {
-    static int _initialized = 0;
+    static int _initialized = FALSE;
     if (!_initialized)
         {
             _init_menu_system();
-            _initialized = 1;
+            _initialized = TRUE;
         }
 
     MENU new_menu = (MENU)_safe_malloc(sizeof(struct __menu));
-    memset(new_menu, 0, sizeof(struct __menu));
+    memset(new_menu, FALSE, sizeof(struct __menu));
 
     new_menu->count = 0;
-    new_menu->options = NULL;
-    new_menu->running = 0;
     new_menu->active_buffer = 0;
     new_menu->selected_index = 0;
+    new_menu->options = NULL;
+    new_menu->running = FALSE;
     new_menu->__ID = _random_uint64_t();
     new_menu->_menu_settings = create_new_settings();
     new_menu->_color_object = create_color_object();
@@ -210,7 +210,7 @@ void new_full_rgb_color(MENU_RGB_COLOR _color_foreground, MENU_RGB_COLOR _color_
 }
 
 /* ----- Menu Operations ----- */
-int add_option(MENU used_menu, const MENU_ITEM item)
+void add_option(MENU used_menu, const MENU_ITEM item)
 {
     size_t new_size = used_menu->count + 1;
     MENU_ITEM* new_options = (MENU_ITEM*)_safe_realloc(used_menu->options, new_size * sizeof(MENU_ITEM));
@@ -219,7 +219,6 @@ int add_option(MENU used_menu, const MENU_ITEM item)
     used_menu->options[used_menu->count] = item;
     used_menu->count = new_size;
     _getMenuSize(used_menu);
-    return 1;
 }
 
 void change_header(MENU used_menu, const char* restrict text)
@@ -391,7 +390,8 @@ static MENU_COLOR _create_default_color()
 
 static MENU_SETTINGS _create_default_settings()
 {
-    MENU_SETTINGS settings = {0};
+    MENU_SETTINGS settings;
+    memset(&settings, FALSE, sizeof(MENU_SETTINGS));
     settings.mouse_enabled = DEFAULT_MOUSE_SETTING;
     settings.header_enabled = DEFAULT_HEADER_SETTING;
     settings.footer_enabled = DEFAULT_FOOTER_SETTING;
@@ -557,14 +557,14 @@ static int _check_menu(unsigned long long saved_id)
     for (int i = 0; i < menus_amount; i++)
         if (menus_array[i] &&
                 menus_array[i]->__ID == saved_id &&
-                menus_array[i]->running) return 1;
-    return 0;
+                menus_array[i]->running) return TRUE;
+    return FALSE;
 }
 
 /* ----- Error Handling ----- */
 static void _show_error_and_wait_extended(MENU menu)
 {
-    menu->need_redraw = 1;
+    menu->need_redraw = TRUE;
 
     // size intitialization
     GetConsoleScreenBufferInfo(menu->hBuffer[menu->active_buffer], &hBack_csbi);
@@ -591,10 +591,9 @@ static void _show_error_and_wait_extended(MENU menu)
     FlushConsoleInputBuffer(hStdin);
     SetConsoleScreenBufferSize(_hError, menu_size);
 
-    running = 1;
+    running = TRUE;
     while (running)
         {
-            event_running = 1;
         error_wait_start:
             ;
             objectWait = WaitForSingleObject(hStdin, UPDATE_FREQUENCE);
@@ -602,19 +601,19 @@ static void _show_error_and_wait_extended(MENU menu)
                 {
                     GetNumberOfConsoleInputEvents(hStdin, &numEvents);
                     ReadConsoleInput(hStdin, inputRecords, min(EVENT_MAX_RECORDS, numEvents), &numEvents);
+					event_running = TRUE;
                     for (k = 0; k < numEvents && event_running; k++)
                         switch(inputRecords[k].EventType)
                             {
                                 case WINDOW_BUFFER_SIZE_EVENT:
                                     current_size = inputRecords[k].Event.WindowBufferSizeEvent.dwSize;
-                                    event_running = 0;
+                                    event_running = FALSE;
                                     break;
                                 case MOUSE_EVENT:
                                 case KEY_EVENT:
                                     goto error_wait_start;
                             }
-                    if (current_size.X >= menu_size.X && current_size.Y >= menu_size.Y)
-                        running = 0;
+                    if (current_size.X >= menu_size.X && current_size.Y >= menu_size.Y) running = FALSE;
                     else
                         {
                             _clear_buffer(_hError);
@@ -684,14 +683,14 @@ static void _renderMenu(const MENU used_menu)
         csbi.srWindow.Right - csbi.srWindow.Left + 1, csbi.srWindow.Bottom - csbi.srWindow.Top + 1
     };
 
-    last_selected_index = -1;
+    last_selected_index = DISABLED;
 
     menu_size = used_menu->menu_size;
     saved_id = used_menu->__ID;
     mouse_input_enabled = used_menu->_menu_settings.mouse_enabled;
-    used_menu->need_redraw = 1;
+    used_menu->need_redraw = TRUE;
 
-    selected_index = mouse_input_enabled ? -1 : 0;
+    selected_index = mouse_input_enabled ? DISABLED : 0;
     used_menu->selected_index = selected_index;
 
     spaces = (menu_size.X - 6) / 2;
@@ -708,7 +707,7 @@ static void _renderMenu(const MENU used_menu)
     {
         0, 0
     };
-    mouse_status = 0;
+    mouse_status = FALSE;
 #endif
     // pre-render calls
     _reset_mouse_state(); // resetting the mouse state because Windows is stupid
@@ -793,8 +792,8 @@ static void _renderMenu(const MENU used_menu)
                 {
                     if (GetNumberOfConsoleInputEvents(hStdin, &numEvents))
                         {
-                            BYTE is_native_key = 0;
-                            BYTE mouse_option_selected = 0;
+                            BYTE is_native_key = FALSE;
+                            BYTE mouse_option_selected = FALSE;
                             ReadConsoleInput(hStdin, inputRecords, min(EVENT_MAX_RECORDS, numEvents), &numEvents);
                             for (event = 0; event < numEvents && is_native_key ^ 1; event++)
                                 switch(inputRecords[event].EventType)
@@ -872,7 +871,7 @@ static void _renderMenu(const MENU used_menu)
 #endif
                                             if (mouse_input_enabled)
                                                 {
-                                                    if (mouse_option_selected ^ 1)
+                                                    if (mouse_option_selected ^ TRUE)
                                                         {
                                                             mouse_pos = inputRecords[event].Event.MouseEvent.dwMousePosition;
                                                             // checking boundaries
@@ -893,7 +892,7 @@ static void _renderMenu(const MENU used_menu)
                                                                 }
                                                         }
                                                     // if nothing was selected but was selected before then resetting this "before"
-                                                    if (mouse_option_selected ^ 1 && something_is_selected)
+                                                    if (mouse_option_selected ^ TRUE && something_is_selected)
                                                         {
                                                             something_is_selected = FALSE;
                                                             used_menu->need_redraw = TRUE;
@@ -902,10 +901,10 @@ static void _renderMenu(const MENU used_menu)
                                                         }
                                                     if (inputRecords[event].Event.MouseEvent.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED && holding ^ 1)
                                                         {
-                                                            holding = 1;
+                                                            holding = TRUE;
                                                             if (something_is_selected) goto input_handler; // handling the input
                                                         }
-                                                    else if (inputRecords[event].Event.MouseEvent.dwButtonState == 0) holding = 0;
+                                                    else if (inputRecords[event].Event.MouseEvent.dwButtonState == 0) holding = FALSE;
                                                 }
                                             break;
                                         case WINDOW_BUFFER_SIZE_EVENT:
