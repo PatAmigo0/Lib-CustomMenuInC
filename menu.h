@@ -1,7 +1,9 @@
+#pragma once
+
 #ifndef _MENU_H_
 #define _MENU_H_
 
-/* includes */
+/* ============== INCLUDES ============== */
 #ifndef _STDIO_H_
 #include <stdio.h>
 #endif
@@ -26,12 +28,10 @@
 #include <time.h>
 #endif
 
-#ifndef _PSAPI_H_
-#include <psapi.h>
-#endif
 /* end */
 
-/* COLOR DEFINITIONS */
+/* ============== CONSTANTS & MACROS ============== */
+// Color Definitions
 // text Colors (Foreground)
 #define BLACK_TEXT          "\033[30m"
 #define RED_TEXT            "\033[31m"
@@ -103,67 +103,123 @@
 
 // values
 #define MAX_RGB_LEN 45
+#define DEFAULT_MOUSE_SETTING 0
+#define DEFAULT_HEADER_SETTING 1
+#define DEFAULT_FOOTER_SETTING 1
+#define DEFAULT_WIDTH_SETTING 1
 
-// types
+/* ============== TYPE DEFINITIONS ============== */
+// main menu type
+struct __menu;
+
+// string macro
 typedef char* RGB_COLOR_SEQ;
 
-struct __menu_item;
-struct __menu;
-struct __menu_settings
+// coord struct
+typedef struct
 {
-    BYTE mouse_enabled;
-    BYTE __garbage_collector;
-};
+	float X;
+	float Y;
+} MENU_COORD;
 
+// menu item struct
+typedef struct __menu_item
+{
+    COORD boundaries;
+    int text_len;
+    const char* text;
+    void (*callback)(struct __menu*, void*); //
+    void* data_chunk;
+} *MENU_ITEM;
+
+// color settings
 typedef struct __menu_color_object
 {
     char headerColor[MAX_RGB_LEN];
     char footerColor[MAX_RGB_LEN];
 } MENU_COLOR;
 
-typedef struct __menu_item* MENU_ITEM;
-typedef struct __menu* MENU;
+// menu settings
+typedef struct __menu_settings
+{
+    BYTE mouse_enabled;
+    BYTE header_enabled;
+    BYTE footer_enabled;
+    BYTE double_width_enabled;
+    MENU_COORD menu_center;
+    BYTE __garbage_collector;
+} MENU_SETTINGS;
 
-typedef void (*__menu_callback)(MENU, void*);
-typedef void* dpointer;
-typedef struct __menu_settings MENU_SETTINGS;
-typedef struct __menu_color_object MENU_COLOR;
-
+// RGB color
 typedef struct
 {
     short r, g, b;
 } MENU_RGB_COLOR;
 
-// function prototypes
-double tick();
-int get_menu_options_amount(MENU restrict menu);
-int is_menu_running(MENU menu);
-int get_menu_selected_index(MENU menu);
-const char* get_menu_header(MENU menu);
-const char* get_menu_footer(MENU menu);
-int get_menu_header_policy(MENU menu);
-int get_menu_footer_policy(MENU menu);
-int get_menu_width_policy(MENU menu);
+// main menu struct
+typedef struct __menu
+{
+    // meta
+    unsigned long long __ID;
+    WORD count;
+    MENU_ITEM* options;
+    BYTE running;
+    BYTE need_redraw;
+    BYTE active_buffer;
+
+    // handles
+    HANDLE hBuffer[2];
+    short int selected_index;
+
+    // render
+    COORD menu_size;
+    COORD current_size;
+    const char* footer;
+    const char* header;
+
+    // other
+    MENU_COLOR _color_object;
+    MENU_SETTINGS _menu_settings;
+} *MENU;
+
+// callback func
+typedef void* dpointer;
+typedef void (*__menu_callback)(MENU, dpointer);
+
+/* ============== FUNCTION DECLARATIONS ============== */
+
+/* ----- Core Functions ----- */
 MENU create_menu();
-MENU_ITEM create_menu_item(const char* restrict text, __menu_callback callback, void* callback_data);
-MENU_SETTINGS create_new_settings();
-MENU_COLOR create_color_object();
-MENU_RGB_COLOR rgb(short r, short g, short b);
-void new_rgb_color(int text_color, MENU_RGB_COLOR color, char output[MAX_RGB_LEN]);
-void new_full_rgb_color(MENU_RGB_COLOR _color_foreground, MENU_RGB_COLOR _color_background, char output[MAX_RGB_LEN]);
-int add_option(MENU used_menu, const MENU_ITEM item);
-void change_header(MENU used_menu, const char* restrict text);
-void change_footer(MENU used_menu, const char* restrict text);
-void set_color_object(MENU menu, MENU_COLOR color_object);
-void toggle_mouse(MENU restrict menu_to_change);
-void set_default_menu_settings(MENU_SETTINGS new_settings);
-void set_default_color_object(MENU_COLOR color_object);
+MENU_ITEM create_menu_item(const char* text, __menu_callback callback, void* callback_data);
 void enable_menu(MENU used_menu);
-void clear_option(MENU used_menu, MENU_ITEM option_to_clear);
-void change_menu_policy(MENU menu_to_change, int new_header_policy, int new_footer_policy);
-void change_width_policy(MENU menu_to_change, int new_width_policy);
 void clear_menu(MENU menu_to_clear);
 void clear_menus();
 void clear_menus_and_exit();
+
+/* ----- Configuration Functions ----- */
+void set_menu_settings(MENU menu, MENU_SETTINGS new_settings);
+void set_color_object(MENU menu, MENU_COLOR color_object);
+void change_menu_policy(MENU menu_to_change, int new_header_policy, int new_footer_policy);
+void toggle_mouse(MENU menu_to_change);
+void change_header(MENU used_menu, const char* text);
+void change_footer(MENU used_menu, const char* text);
+
+/* ----- Item Management ----- */
+void add_option(MENU used_menu, const MENU_ITEM item);
+void clear_option(MENU used_menu, MENU_ITEM option_to_clear);
+
+/* ----- Color Functions ----- */
+MENU_RGB_COLOR rgb(short r, short g, short b);
+void new_rgb_color(int text_color, MENU_RGB_COLOR color, char output[MAX_RGB_LEN]);
+void new_full_rgb_color(MENU_RGB_COLOR fg, MENU_RGB_COLOR bg, char output[MAX_RGB_LEN]);
+
+/* ----- Settings Management ----- */
+MENU_SETTINGS create_new_settings();
+MENU_COLOR create_color_object();
+void set_default_menu_settings(MENU_SETTINGS new_settings);
+void set_default_color_object(MENU_COLOR color_object);
+
+/* ----- Utility Functions ----- */
+double tick();
 
 #endif
