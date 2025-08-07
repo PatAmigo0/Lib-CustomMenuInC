@@ -115,7 +115,14 @@ struct __menu;
 // string macro
 typedef char* RGB_COLOR_SEQ;
 
-// menu item structure
+// coord struct
+typedef struct
+{
+	float X;
+	float Y;
+} MENU_COORD;
+
+// menu item struct
 typedef struct __menu_item
 {
     COORD boundaries;
@@ -139,6 +146,7 @@ typedef struct __menu_settings
     BYTE header_enabled;
     BYTE footer_enabled;
     BYTE double_width_enabled;
+    MENU_COORD menu_center;
     BYTE __garbage_collector;
 } MENU_SETTINGS;
 
@@ -148,7 +156,7 @@ typedef struct
     short r, g, b;
 } MENU_RGB_COLOR;
 
-// main menu structure
+// main menu struct
 typedef struct __menu
 {
     // meta
