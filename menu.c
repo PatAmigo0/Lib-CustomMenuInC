@@ -60,10 +60,15 @@ static unsigned long long _random_uint64_t();
 static void _init_menu_system();
 static void _init_hError();
 static HANDLE _createConsoleScreenBuffer(void);
+
 static void _draw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text, ...);
 static void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text);
 static void _vwrite_string(HANDLE hDestination, const char* restrict text, va_list args);
 static void _lwrite_string(HANDLE hDestination, const char* restrict text);
+
+static void _clamp_center_coord(COORD* coord);
+static HANDLE _find_first_active_menu_buffer();
+
 static void _setConsoleActiveScreenBuffer(HANDLE hBufferToActivate);
 static void _getMenuSize(MENU menu);
 static BYTE _size_check(MENU menu);
@@ -72,9 +77,10 @@ static void _clear_buffer(HANDLE hBuffer);
 static void _reset_mouse_state();
 static int _check_menu(unsigned long long saved_id);
 static void _block_input(DWORD* oldMode);
+
 static void _renderMenu(const MENU used_menu);
 static void _show_error_and_wait_extended(MENU menu);
-static HANDLE _find_first_active_menu_buffer();
+static COORD _calculate_start_coordinates(MENU menu, COORD current_size);
 
 /* ============== PUBLIC FUNCTION IMPLEMENTATIONS ============== */
 
@@ -104,6 +110,7 @@ void toggle_mouse(MENU menu_to_change)
 void set_menu_settings(MENU menu, MENU_SETTINGS new_settings)
 {
     memcpy((void*)&(menu->_menu_settings), (void*)&new_settings, sizeof(MENU_SETTINGS));
+    _clamp_center_coord(&(menu->_menu_settings.menu_center));
 }
 
 void set_default_menu_settings(MENU_SETTINGS new_settings)
@@ -396,6 +403,10 @@ static MENU_SETTINGS _create_default_settings()
     settings.header_enabled = DEFAULT_HEADER_SETTING;
     settings.footer_enabled = DEFAULT_FOOTER_SETTING;
     settings.double_width_enabled = DEFAULT_WIDTH_SETTING;
+    settings.menu_center = (MENU_COORD)
+    {
+        0, 0
+    };
     settings.__garbage_collector = TRUE;
     return settings;
 }
@@ -432,6 +443,15 @@ static void _init_menu_system()
 
     input.type = INPUT_MOUSE;
     input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
+
+    CONSOLE_SCREEN_BUFFER_INFO icsbi;
+    GetConsoleScreenBufferInfo(hConsole, &icsbi);
+
+    cached_size = (COORD)
+    {
+        icsbi.srWindow.Right - icsbi.srWindow.Left + 1,
+                             icsbi.srWindow.Bottom - icsbi.srWindow.Top + 1
+    };
 
     if (!menu_settings_initialized)
         set_default_menu_settings(_create_default_settings());
@@ -478,6 +498,18 @@ static void _vwrite_string(HANDLE hDestination, const char* text, va_list args)
 static void _lwrite_string(HANDLE hDestination, const char* text)
 {
     WriteConsoleA(hDestination, text, (DWORD)strlen(text), &written, NULL);
+}
+
+/* ---- Other Utilities ---- */
+static void _clamp_center_coord(COORD* coord)
+{
+	// x
+	if (coord->X > 1) coord->X = 1;
+	else if (coord->X < -1) coord->X = -1;
+	
+	// y
+	if (coord->Y > 1) coord->Y = 1;
+	else if (coord->Y < -1) coord->Y = -1; 
 }
 
 /* ----- Console Management ----- */
@@ -601,7 +633,7 @@ static void _show_error_and_wait_extended(MENU menu)
                 {
                     GetNumberOfConsoleInputEvents(hStdin, &numEvents);
                     ReadConsoleInput(hStdin, inputRecords, min(EVENT_MAX_RECORDS, numEvents), &numEvents);
-					event_running = TRUE;
+                    event_running = TRUE;
                     for (k = 0; k < numEvents && event_running; k++)
                         switch(inputRecords[k].EventType)
                             {
@@ -629,6 +661,30 @@ static void _show_error_and_wait_extended(MENU menu)
 }
 
 /* ----- Main Rendering Loop ----- */
+static COORD _calculate_start_coordinates(MENU menu, COORD current_size)
+{
+    MENU_COORD normcoord = menu->_menu_settings.menu_center;
+    COORD menu_size = menu->menu_size;
+    COORD newcoord;
+
+    // main calculations
+    newcoord.X = (float)(normcoord.X + 1.0f) * (float)(current_size.X - 1.0f) / 2.0f;
+    newcoord.Y = (float)(1.0f - normcoord.Y) * (float)(current_size.Y - 1.0f) / 2.0f;
+    
+    newcoord.X -= menu_size.X / 2;
+    newcoord.Y -= menu_size.Y / 2 - OFFSET_VALUE;
+    
+    // clamping time
+    if (newcoord.X + menu_size.X > current_size.X) newcoord.X -= menu_size.X / 2;
+	if (newcoord.Y + menu_size.Y > current_size.Y) newcoord.Y -= OFFSET_VALUE;
+    
+    
+    if (newcoord.X < 0) newcoord.X = 0;
+    if (newcoord.Y < 0) newcoord.Y = 0;
+    
+    return newcoord;
+}
+
 static void _renderMenu(const MENU used_menu)
 {
     if (!used_menu) return;
@@ -744,6 +800,7 @@ static void _renderMenu(const MENU used_menu)
                 {
                     hBackBuffer = used_menu->hBuffer[used_menu->active_buffer ^ 1];
                     _clear_buffer(hBackBuffer);
+                    start = _calculate_start_coordinates(used_menu, current_size);
 #ifdef DEBUG
                     _draw_at_position(hBackBuffer, 0, 0, "__ID: %llu", used_menu->__ID);
                     _draw_at_position(hBackBuffer, 0, 2, "SELECTED: %d", something_is_selected);
@@ -753,10 +810,9 @@ static void _renderMenu(const MENU used_menu)
                     _draw_at_position(hBackBuffer, 0, 10, "MOUSE POS: %d %d   ", debug_mouse_pos.X, debug_mouse_pos.Y);
                     _draw_at_position(hBackBuffer, 0, 12, "mouse status: %d", mouse_status);
                     _draw_at_position(hBackBuffer, 0, 14, "menus_amount: %d", menus_amount);
-                    _print_memory_info(hBackBuffer); // -> 32
+                    _print_memory_info(hBackBuffer); // -> 30
+                    _draw_at_position(hBackBuffer, 0, 32, "menus start coord: %d %d", start.X, start.Y);
 #endif
-                    start.X = (current_size.X - menu_size.X) / 2;
-                    start.Y = (current_size.Y - menu_size.Y) / 2 + OFFSET_VALUE;
 
                     // header
                     if (used_menu->_menu_settings.header_enabled)
@@ -922,5 +978,4 @@ end_render_loop:; // anchor
     if (menus_amount == 0)
         _setConsoleActiveScreenBuffer(hConsole);
     else _setConsoleActiveScreenBuffer(_find_first_active_menu_buffer());
-    // free(used_menu); no need for now
 }
