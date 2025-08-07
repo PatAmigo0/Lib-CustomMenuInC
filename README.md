@@ -15,6 +15,7 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 - Advanced color customization with macros / rgb colors
 - Default settings configuration
 - Double buffering for smooth rendering
+- Selectable place for the menu
 - Callback functions with data passing
 - Dynamically centers the menu in the console
 - Clear abstraction layer
@@ -132,6 +133,7 @@ int main()
     custom.mouse_enabled = 1;
     custom.header_enabled = 0;
     custom.footer_enabled = 0;
+    custom.menu_center = (MENU_COORD){-1,1}; // LEFT TOP CORNER 
     set_menu_settings(my_menu, custom);
     ```
 
@@ -244,6 +246,7 @@ gcc <your_app.c> menu.c -o your_app
 - Fixed memory management bugs
 - Addressed window resizing edge cases
 - Optimized mouse event processing
+- You can now pivot the menu to any point on the screen
 
 ## Limitations
 - Windows-only implementation
