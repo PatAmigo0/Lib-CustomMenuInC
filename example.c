@@ -636,7 +636,6 @@ void menu1_item_2()
     MENU new_menu = create_menu();
     change_header(new_menu, "Matrix control panel");
     change_menu_policy(new_menu, 1, 0);
-    change_width_policy(new_menu, 0);
     add_option(new_menu, create_menu_item("Generate random matrix", menu3_item_1, NULL));
     add_option(new_menu, create_menu_item("Enter your own matrix", menu3_item_2, NULL));
     add_option(new_menu, create_menu_item("Go back", go_back, NULL));
@@ -662,6 +661,7 @@ int main()
 {
     MENU_SETTINGS new_settings = create_new_settings();
     new_settings.mouse_enabled = 1;
+    new_settings.menu_center = (MENU_COORD){-1, 1};
     set_default_menu_settings(new_settings); // now every menu is having this by default
 
     MENU_COLOR new_color = create_color_object();
