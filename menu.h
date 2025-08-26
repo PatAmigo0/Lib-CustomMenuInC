@@ -107,6 +107,60 @@
 #define DEFAULT_HEADER_SETTING 1
 #define DEFAULT_FOOTER_SETTING 1
 #define DEFAULT_WIDTH_SETTING 1
+#define DEFAULT_LEGACY_SETTING 0
+
+/* ============== LEGACY COLORS ============== */
+
+// standard colors (dark)
+#define BLACK 0
+#define BLUE FOREGROUND_BLUE
+#define GREEN FOREGROUND_GREEN
+#define CYAN FOREGROUND_GREEN | FOREGROUND_BLUE
+#define RED FOREGROUND_RED
+#define MAGENTA FOREGROUND_RED | FOREGROUND_BLUE
+#define YELLOW FOREGROUND_RED | FOREGROUND_GREEN
+#define WHITE FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE
+
+// bright colors (add intensity)
+#define BRIGHT_BLUE FOREGROUND_BLUE | FOREGROUND_INTENSITY
+#define BRIGHT_GREEN FOREGROUND_GREEN | FOREGROUND_INTENSITY
+#define BRIGHT_CYAN FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY
+#define BRIGHT_RED FOREGROUND_RED | FOREGROUND_INTENSITY
+#define BRIGHT_MAGENTA FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY
+#define BRIGHT_YELLOW FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY
+#define BRIGHT_WHITE FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY
+
+// standard background colors
+#define BG_BLACK 0
+#define BG_BLUE BACKGROUND_BLUE
+#define BG_GREEN BACKGROUND_GREEN
+#define BG_CYAN BACKGROUND_GREEN | BACKGROUND_BLUE
+#define BG_RED BACKGROUND_RED
+#define BG_MAGENTA BACKGROUND_RED | BACKGROUND_BLUE
+#define BG_YELLOW BACKGROUND_RED | BACKGROUND_GREEN
+#define BG_WHITE BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE
+
+// bright background colors
+#define BG_BRIGHT_BLUE BACKGROUND_BLUE | BACKGROUND_INTENSITY
+#define BG_BRIGHT_GREEN BACKGROUND_GREEN | BACKGROUND_INTENSITY
+#define BG_BRIGHT_CYAN BACKGROUND_GREEN | BACKGROUND_BLUE | BACKGROUND_INTENSITY
+#define BG_BRIGHT_RED BACKGROUND_RED | BACKGROUND_INTENSITY
+#define BG_BRIGHT_MAGENTA BACKGROUND_RED | BACKGROUND_BLUE | BACKGROUND_INTENSITY
+#define BG_BRIGHT_YELLOW BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_INTENSITY
+#define BG_BRIGHT_WHITE BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE | BACKGROUND_INTENSITY
+
+// some useful combinations
+#define ERROR_COLOR FOREGROUND_RED | FOREGROUND_INTENSITY
+#define WARNING_COLOR FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY
+#define SUCCESS_COLOR FOREGROUND_GREEN | FOREGROUND_INTENSITY
+#define INFO_COLOR FOREGROUND_BLUE | FOREGROUND_INTENSITY
+#define HIGHLIGHT_COLOR FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY | BACKGROUND_BLUE
+
+// menu-related colors
+#define MENU_HEADER_COLOR FOREGROUND_BLUE | FOREGROUND_INTENSITY | BACKGROUND_WHITE
+#define MENU_SELECTED_COLOR FOREGROUND_WHITE | FOREGROUND_INTENSITY | BACKGROUND_BLUE
+#define MENU_NORMAL_COLOR FOREGROUND_WHITE
+#define MENU_FOOTER_COLOR FOREGROUND_GREEN | FOREGROUND_INTENSITY
 
 /* ============== TYPE DEFINITIONS ============== */
 // main menu type
@@ -118,8 +172,8 @@ typedef char* RGB_COLOR_SEQ;
 // coord struct
 typedef struct
 {
-	float X;
-	float Y;
+    float X;
+    float Y;
 } MENU_COORD;
 
 // menu item struct
@@ -139,6 +193,13 @@ typedef struct __menu_color_object
     char footerColor[MAX_RGB_LEN];
 } MENU_COLOR;
 
+typedef struct __legacy_menu_color_object
+{
+    WORD headerColor;
+    WORD footerColor;
+    WORD optionColor;
+} LEGACY_MENU_COLOR;
+
 // menu settings
 typedef struct __menu_settings
 {
@@ -146,9 +207,27 @@ typedef struct __menu_settings
     BYTE header_enabled;
     BYTE footer_enabled;
     BYTE double_width_enabled;
+    BYTE force_legacy_mode;
     MENU_COORD menu_center;
     BYTE __garbage_collector;
 } MENU_SETTINGS;
+
+// menu render
+typedef struct __menu_render_unit
+{
+    const char* text;
+    DWORD unit_type; // for the future (like heade = 0x1, footer and etc)
+    void* extra_data;
+} MENU_RENDER_UNIT;
+
+typedef struct __menu_render_unit_types
+{
+    DWORD header;
+    DWORD footer;
+    DWORD selectable;
+} MENU_RENDER_UNIT_TYPES;
+
+typedef MENU_RENDER_UNIT* PMENU_RENDER_UNIT;
 
 // RGB color
 typedef struct
@@ -163,9 +242,11 @@ typedef struct __menu
     unsigned long long __ID;
     WORD count;
     MENU_ITEM* options;
+    BYTE active_buffer;
+
+    // boolean
     BYTE running;
     BYTE need_redraw;
-    BYTE active_buffer;
 
     // handles
     HANDLE hBuffer[2];
@@ -174,12 +255,15 @@ typedef struct __menu
     // render
     COORD menu_size;
     COORD current_size;
+    COORD halt_size;
+
     const char* footer;
     const char* header;
 
-    // other
-    MENU_COLOR _color_object;
+    // objects
     MENU_SETTINGS _menu_settings;
+    MENU_COLOR _color_object;
+    LEGACY_MENU_COLOR _legacy_color_object;
 } *MENU;
 
 // callback func
@@ -216,10 +300,15 @@ void new_full_rgb_color(MENU_RGB_COLOR fg, MENU_RGB_COLOR bg, char output[MAX_RG
 /* ----- Settings Management ----- */
 MENU_SETTINGS create_new_settings();
 MENU_COLOR create_color_object();
+LEGACY_MENU_COLOR create_legacy_color_object();
 void set_default_menu_settings(MENU_SETTINGS new_settings);
 void set_default_color_object(MENU_COLOR color_object);
+void set_default_legacy_color_object(LEGACY_MENU_COLOR color_object);
 
 /* ----- Utility Functions ----- */
 double tick();
+
+// Global struct that defines types for render units
+static MENU_RENDER_UNIT_TYPES mrut;
 
 #endif
