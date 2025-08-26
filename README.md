@@ -3,7 +3,14 @@
 This lightweight library provides a simple, easy-to-use menu system for Windows console applications. It features customizable menus, keyboard and mouse navigation, and a clean abstraction layer.
 
 ## Version
-```0.9.3 BETA```
+```0.9.4 BETA```
+
+## NEW IN VERSION 0.9.4
+- **Legacy Console Support**: Partitial compatibility with Windows 7/8 consoles
+- **Automatic VT100 Detection**: Automatically detects and uses appropriate rendering mode
+- **Force Legacy Mode**: Manual override for legacy color systems
+- **Enhanced Error Handling**: Better error messages for both VT100 and legacy modes
+- **Memory Optimizations**: Reduced memory footprint and improved performance
 
 ## Features
 
@@ -19,6 +26,7 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 - Callback functions with data passing
 - Dynamically centers the menu in the console
 - Clear abstraction layer
+- **NEW**: Legacy console support (Windows 7/8 compatibility) (automatic VT100 detection)
 
 ## Installation
 
@@ -30,22 +38,9 @@ This lightweight library provides a simple, easy-to-use menu system for Windows 
 
 ## Requirements
 
-- Windows operating system
+- Windows operating system (Windows 7+)
 - C99 compatible compiler
 - Standard Windows libraries
-- Console supporting ANSI escape codes (Windows 10+)
-
-## Included Libraries in Implementation
-The library implementation (`menu.c`) includes the following essential headers:
-
-```c
-#include <stdio.h>    // standard I/O operations
-#include <stdlib.h>   // memory allocation, exit()
-#include <windows.h>  // windows API functions
-#include <string.h>   // string manipulation
-#include <stdarg.h>   // variable argument handling
-#include <time.h>     // timing functions
-```
 
 ## Usage
 
@@ -79,6 +74,46 @@ int main()
 }
 ```
 
+### NEW: Force Legacy Mode Example
+
+```c
+#include "menu.h"
+
+void callback(MENU menu, void* data)
+{
+    printf(":)");
+    getchar();
+}
+
+int main()
+{
+    // force legacy mode if you like it!
+    MENU_SETTINGS settings = create_new_settings();
+    settings.force_legacy_mode = 1; // Force legacy color system
+    set_default_menu_settings(settings);
+
+    // this won't do anything in legacy mode
+    MENU_COLOR new_color = create_color_object();
+    strcpy(new_color.headerColor, MAGENTA_BG WHITE_TEXT);
+    new_full_rgb_color(rgb(45, 230, 0), rgb(143, 32, 255), new_color.footerColor);
+    set_default_color_object(new_color);
+
+    // this won't do anything in non legacy mode
+    LEGACY_MENU_COLOR legacy_colors = create_legacy_color_object();
+    legacy_colors.headerColor = BRIGHT_MAGENTA;
+    legacy_colors.footerColor = BRIGHT_MAGENTA;
+    legacy_colors.optionColor = HIGHLIGHT_COLOR;
+    set_default_legacy_color_object(legacy_colors);
+    
+    MENU menu = create_menu();
+    add_option(menu, create_menu_item("Options", callback, NULL));
+    add_option(menu, create_menu_item("Exit", callback, NULL));
+    
+    enable_menu(menu);
+    return 0;
+}
+```
+
 ## Core Functions Reference
 
 ### Menu Creation & Management
@@ -89,7 +124,7 @@ int main()
    Activates and displays the menu.
 
 3. **`void clear_menu(MENU menu)`**  
-   **FIXED:** Now properly frees all resources (menu struct, items, and buffers)
+   Frees all resources (menu struct, items, and buffers)
 
 4. **`void clear_menus()`**  
    Destroys all created menus.
@@ -105,7 +140,7 @@ int main()
    Adds a menu item to a menu.
 
 8. **`void clear_option(MENU menu, MENU_ITEM option)`**  
-   **FIXED:** Now handles memory reallocation correctly after removal
+   Removes a menu item from a menu.
 
 ### Appearance Customization
 9. **`void change_header(MENU menu, const char* text)`**  
@@ -125,17 +160,8 @@ int main()
 13. **`MENU_SETTINGS create_new_settings()`**  
     Creates a new settings object with default values.
     
-15. **`void set_menu_settings(MENU menu, MENU_SETTINGS settings)`** 
-    Applies custom settings to a specific menu.  
-    *Example:*
-    ```c
-    MENU_SETTINGS custom = create_new_settings();
-    custom.mouse_enabled = 1;
-    custom.header_enabled = 0;
-    custom.footer_enabled = 0;
-    custom.menu_center = (MENU_COORD){-1,1}; // LEFT TOP CORNER 
-    set_menu_settings(my_menu, custom);
-    ```
+14. **`void set_menu_settings(MENU menu, MENU_SETTINGS settings)`** 
+    Applies custom settings to a specific menu.
 
 15. **`void set_default_menu_settings(MENU_SETTINGS settings)`**  
     Sets default settings for new menus.
@@ -150,87 +176,22 @@ int main()
 18. **`void set_default_color_object(MENU_COLOR color_object)`**  
     Sets default color scheme for new menus.
 
+### NEW: Legacy Color Management
+19. **`LEGACY_MENU_COLOR create_legacy_color_object()`**  
+    Creates a new legacy color object with default colors.
+
+20. **`void set_default_legacy_color_object(LEGACY_MENU_COLOR color_object)`**  
+    Sets default legacy color scheme for new menus.
+
 ### RGB Color Functions
-19. **`MENU_RGB_COLOR rgb(short r, short g, short b)`**  
+21. **`MENU_RGB_COLOR rgb(short r, short g, short b)`**  
     Creates an RGB color object with specified components (0-255).
 
-20. **`void new_rgb_color(int text_color, MENU_RGB_COLOR color, char output[MAX_RGB_LEN])`**  
-    Generates ANSI escape sequence for a single RGB color.  
-    - `text_color`: 1 for foreground, 0 for background  
-    - `color`: RGB color to convert  
-    - `output`: Buffer to store the sequence (MAX_RGB_LEN = 45)
+22. **`void new_rgb_color(int text_color, MENU_RGB_COLOR color, char output[MAX_RGB_LEN])`**  
+    Generates ANSI escape sequence for a single RGB color.
 
-21. **`void new_full_rgb_color(MENU_RGB_COLOR fg, MENU_RGB_COLOR bg, char output[MAX_RGB_LEN])`**  
-    Generates ANSI sequence for both foreground and background RGB colors.  
-    - `fg`: Foreground RGB color  
-    - `bg`: Background RGB color  
-    - `output`: Buffer to store the sequence (MAX_RGB_LEN = 45)
-
-## Color Customization
-
-### RGB Color Functions
-Create custom colors using RGB values (0-255):
-
-```c
-// create RGB colors
-MENU_RGB_COLOR custom_fg = rgb(255, 200, 0);  // gold text
-MENU_RGB_COLOR custom_bg = rgb(30, 30, 100);  // dark blue background
-
-// generate sequences
-char full_seq[MAX_RGB_LEN];
-
-// create combined sequence
-new_full_rgb_color(custom_fg, custom_bg, full_seq);
-
-// use it after via strcpy(dest, src)
-// ...
-```
-
-### Predefined Color Macros
-## Example with Colors and Custom Settings
-
-```c
-#include "menu.h"
-
-typedef struct
-{
-    int id;
-    const char* name;
-} MenuData;
-
-void file_callback(MENU menu, void* data)
-{
-    MenuData* file_data = (MenuData*)data;
-    printf("Selected file option: %s (ID: %d)\n", 
-           file_data->name, file_data->id);
-    getchar();
-}
-
-int main()
-{
-    // create custom settings
-    MENU_SETTINGS custom_settings = create_new_settings();
-    custom_settings.mouse_enabled = 1;
-    set_default_menu_settings(custom_settings);
-
-    // create custom colors
-    MENU_COLOR custom_colors = create_color_object();
-    
-    // use new_full_rgb_color for custom RGB
-    new_full_rgb_color(rgb(45, 230, 0), rgb(143, 32, 255), custom_colors.footerColor);
-    
-    set_default_color_object(custom_colors);
-
-    MENU main_menu = create_menu();
-    
-    // add menu items
-    MenuData open_data = {1, "Open File"};
-    add_option(main_menu, create_menu_item("Open", file_callback, &open_data));
-    
-    enable_menu(main_menu);
-    return 0;
-}
-```
+23. **`void new_full_rgb_color(MENU_RGB_COLOR fg, MENU_RGB_COLOR bg, char output[MAX_RGB_LEN])`**  
+    Generates ANSI sequence for both foreground and background RGB colors.
 
 ## Building
 
@@ -239,33 +200,33 @@ Compile with your project:
 gcc <your_app.c> menu.c -o your_app
 ```
 
-## Key Updates
-
-### v0.9.3 BETA
-- Implemented RGB color support for the menu
-- Fixed memory management bugs
-- Addressed window resizing edge cases
-- Optimized mouse event processing
-- You can now pivot the menu to any point on the screen
-
-## Limitations
-- Windows-only implementation
-- Requires console supporting ANSI escape codes (Windows 10+)
-- Console resize handling has minimum size requirements
-- Limited to vertical menus
-
-*Planned for future versions: Horizontal menus, improved resize handling*
-
-## Important Notes
+## IMPORTANT NOTES
 
 1. **Memory Management**  
-   Always use `clear_menu()` to destroy menus - direct `free()` calls will cause memory leaks
+   - Always use `clear_menu()` to properly free menu resources
+   - Never hold persistent pointers to menu items - they're managed internally
+   - Call `clear_menus_and_exit()` for proper cleanup on program termination
 
-2. **Item Removal**  
-   When removing items with `clear_option()`, the selected index is automatically adjusted to prevent invalid positions
+2. **Legacy Mode Considerations**  
+   - Legacy mode uses Windows console attributes instead of ANSI codes
+   - Color customization is more limited in legacy mode
+   - Legacy colors are defined using Windows `WORD` values, not RGB
+
+3. **Performance**  
+   - Menus with many options may render slower on non legacy systems
+   - Mouse input is well optimized
+
+4. **Compatibility**  
+   - VT100 mode requires Windows 10 or newer
+   - Legacy mode works on Windows 7 and newer
+   - Test both modes if targeting multiple Windows versions
+   - It's always better to have 2 styles for your menu
+
+5. **Error Handling**  
+   - The library will automatically handle most console compatibility issues
+   - Error messages adapt to the current rendering mode (VT100 or legacy)
+   - Size validation ensures menus fit the console window
 
 ## Contributing
 
 Contributions are welcome! Please submit pull requests or open issues on GitHub.
-
-> **Critical Restriction**: Never create a persistent pointer to a `MENU_ITEM` created via `create_menu_item()`. These objects are managed internally by the library and direct access may cause memory corruption.
