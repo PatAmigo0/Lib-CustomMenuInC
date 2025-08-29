@@ -80,9 +80,6 @@
 #define HIDDEN_TEXT        "\033[8m"
 #define STRIKETHROUGH_TEXT "\033[9m"
 
-// reset all styles
-#define RESET_ALL_STYLES          "\033[0m"
-
 // combinations
 #define DARK_BLUE_BG_WHITE_TEXT     "\033[44;37m"
 #define CYAN_BG_BLACK_TEXT          "\033[46;30m"
@@ -96,8 +93,11 @@
 #define BRIGHT_RED_BG_WHITE_TEXT    "\033[101;97m"
 #define BRIGHT_YELLOW_BG_BLACK_TEXT "\033[103;30m"
 
+// reset all styles
+#define RESET_ALL_STYLES          "\x1b[0m"
+
 // screen managment (vt)
-#define RESET_MOUSE_POSITION "\033[H"
+#define RESET_MOUSE_POSITION "\x1b[H"
 #define CLEAR_SCREEN "\x1b[2J"
 #define CLEAR_SCROLL_BUFFER "\x1b[3J"
 
@@ -187,10 +187,16 @@ typedef struct __menu_item
 } *MENU_ITEM;
 
 // color settings
+typedef struct __menu_color_object_property
+{
+    char __rgb_seq[MAX_RGB_LEN];
+} COLOR_OBJECT_PROPERTY;
+
 typedef struct __menu_color_object
 {
-    char headerColor[MAX_RGB_LEN];
-    char footerColor[MAX_RGB_LEN];
+    COLOR_OBJECT_PROPERTY headerColor;
+    COLOR_OBJECT_PROPERTY footerColor;
+    COLOR_OBJECT_PROPERTY optionColor;
 } MENU_COLOR;
 
 typedef struct __legacy_menu_color_object
@@ -203,13 +209,13 @@ typedef struct __legacy_menu_color_object
 // menu settings
 typedef struct __menu_settings
 {
-    BYTE mouse_enabled;
-    BYTE header_enabled;
-    BYTE footer_enabled;
-    BYTE double_width_enabled;
-    BYTE force_legacy_mode;
+    int mouse_enabled;
+    int header_enabled;
+    int footer_enabled;
+    int double_width_enabled;
+    int force_legacy_mode;
     MENU_COORD menu_center;
-    BYTE __garbage_collector;
+    int __garbage_collector;
 } MENU_SETTINGS;
 
 // menu render
@@ -242,11 +248,11 @@ typedef struct __menu
     unsigned long long __ID;
     WORD count;
     MENU_ITEM* options;
-    BYTE active_buffer;
+    int active_buffer;
 
     // boolean
-    BYTE running;
-    BYTE need_redraw;
+    int running;
+    int need_redraw;
 
     // handles
     HANDLE hBuffer[2];
@@ -261,9 +267,9 @@ typedef struct __menu
     const char* header;
 
     // objects
-    MENU_SETTINGS _menu_settings;
-    MENU_COLOR _color_object;
-    LEGACY_MENU_COLOR _legacy_color_object;
+    MENU_SETTINGS menu_settings;
+    MENU_COLOR color_object;
+    LEGACY_MENU_COLOR legacy_color_object;
 } *MENU;
 
 // callback func
@@ -293,9 +299,9 @@ void add_option(MENU used_menu, const MENU_ITEM item);
 void clear_option(MENU used_menu, MENU_ITEM option_to_clear);
 
 /* ----- Color Functions ----- */
-MENU_RGB_COLOR rgb(short r, short g, short b);
-void new_rgb_color(int text_color, MENU_RGB_COLOR color, char output[MAX_RGB_LEN]);
-void new_full_rgb_color(MENU_RGB_COLOR fg, MENU_RGB_COLOR bg, char output[MAX_RGB_LEN]);
+MENU_RGB_COLOR mrgb(short r, short g, short b);
+COLOR_OBJECT_PROPERTY new_rgb_color(int text_color, MENU_RGB_COLOR color);
+COLOR_OBJECT_PROPERTY new_full_rgb_color(MENU_RGB_COLOR fg, MENU_RGB_COLOR bg);
 
 /* ----- Settings Management ----- */
 MENU_SETTINGS create_new_settings();
