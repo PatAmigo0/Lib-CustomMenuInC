@@ -67,8 +67,8 @@ static HANDLE hConsole, hConsoleError, hCurrent, _hError, hStdin;
 static CONSOLE_SCREEN_BUFFER_INFO hBack_csbi;
 
 static int menu_settings_initialized = FALSE,
-            menu_color_initialized = FALSE,
-            menu_legacy_color_initialized = FALSE;
+           menu_color_initialized = FALSE,
+           menu_legacy_color_initialized = FALSE;
 
 // input defines
 static INPUT input = {0};
@@ -150,10 +150,11 @@ static void _draw_render_unit_legacy(MENU_RENDER_ARGUMENT rargument, COORD pos, 
 double tick()
 {
     static LARGE_INTEGER freq = {0};
-    if (freq.QuadPart == 0) QueryPerformanceFrequency(&freq);
-    static LARGE_INTEGER counter;
+    if (freq.QuadPart == 0)
+        QueryPerformanceFrequency(&freq);
+    LARGE_INTEGER counter;
     QueryPerformanceCounter(&counter);
-    return (double)counter.QuadPart * 1000.0 / (double)freq.QuadPart;
+    return (double)counter.QuadPart / (double)freq.QuadPart;
 }
 
 /* ----- Menu Policy Functions ----- */
@@ -676,7 +677,7 @@ static void _getMenuSize(MENU menu)
             if (current_width > max_width) max_width = current_width;
         }
 
-    menu->menu_size.X = (max_width + 4) * (menu->menu_settings.double_width_enabled ? 2 : 1);
+    menu->menu_size.X = (max_width + 4);
     menu->menu_size.Y = menu->count * 2 + 6;
 
     menu->halt_size.X = menu->menu_size.X / 2;
@@ -880,6 +881,7 @@ static COORD _calculate_start_coordinates(MENU menu, COORD current_size)
 static void _draw_render_unit(MENU_RENDER_ARGUMENT rargument, COORD pos, PMENU_RENDER_UNIT render_unit)
 {
     HANDLE backBuffer;
+    // size_t space = 0;
     if (rargument.tag == MENU_TYPE)
         {
             backBuffer = rargument.value.menu->hBuffer[rargument.value.menu->active_buffer ^ 1];
@@ -892,17 +894,13 @@ static void _draw_render_unit(MENU_RENDER_ARGUMENT rargument, COORD pos, PMENU_R
     switch (unit_type)
         {
             case (HEADER_TYPE): // HEADER
-                _ldraw_at_position(backBuffer, pos.X, pos.Y, render_unit->text);
-                break;
             case (FOOTER_TYPE): // FOOTER
-                _ldraw_at_position(backBuffer, pos.X, pos.Y, render_unit->text);
+                _draw_at_position(backBuffer, pos.X, pos.Y, "%s", render_unit->text);
                 break;
             case (SELECTABLE_TYPE): // SELECTABLE (option)
                 memset((void*)option_text, '\0', BUFFER_CAPACITY);
                 if (*((WORD*)render_unit->extra_data))
-                    {
-                        _draw_at_position(backBuffer, pos.X, pos.Y, "%s%s"RESET_ALL_STYLES, rargument.value.menu->color_object.optionColor.__rgb_seq, render_unit->text);
-                    }
+                    _draw_at_position(backBuffer, pos.X, pos.Y, "%s%s"RESET_ALL_STYLES, rargument.value.menu->color_object.optionColor.__rgb_seq, render_unit->text);
                 else
                     _ldraw_at_position(backBuffer, pos.X, pos.Y, render_unit->text);
                 break;
@@ -963,13 +961,13 @@ static void _renderMenu(const MENU used_menu)
 
     // REGISTER VARIABLES BLOCK
     COORD current_size, // current console window dimensions (X=width, Y=height)
-             old_size,    // previous console window dimensions before resize
-             start;       // top-left rendering position for the menu
+          old_size,    // previous console window dimensions before resize
+          start;       // top-left rendering position for the menu
     int y_max,         // maximum Y coordinate of menu options (bottom boundary)
-             y_min,         // minimum Y coordinate of menu options (top boundary)
-             x_max;         // maximum X coordinate of menu options (right boundary)
+        y_min,         // minimum Y coordinate of menu options (top boundary)
+        x_max;         // maximum X coordinate of menu options (right boundary)
     int size_check,   // flag: TRUE if console size is too small for menu display
-             mouse_input_enabled; // flag: TRUE if mouse input is enabled for this menu
+        mouse_input_enabled; // flag: TRUE if mouse input is enabled for this menu
 
     // BASIC VARIABLES BLOCK
     int y,                      // current Y position for rendering menu items
@@ -1039,7 +1037,7 @@ static void _renderMenu(const MENU used_menu)
         {
             snprintf(header, sizeof(header), "%s%*s%s%*s" RESET_ALL_STYLES, used_menu->color_object.headerColor.__rgb_seq,
                      spaces, "", used_menu->header, spaces, "");
-            snprintf(footer, sizeof(footer), "%s%-*s " RESET_ALL_STYLES, used_menu->color_object.footerColor.__rgb_seq,
+            snprintf(footer, sizeof(footer), "%s%-*s" RESET_ALL_STYLES, used_menu->color_object.footerColor.__rgb_seq,
                      menu_size.X - 4, used_menu->footer);
             _draw_render_unit_func = _draw_render_unit;
         }
@@ -1170,7 +1168,7 @@ static void _renderMenu(const MENU used_menu)
                             int is_native_key = FALSE;
                             int mouse_option_selected = FALSE;
                             ReadConsoleInput(hStdin, inputRecords, min(EVENT_MAX_RECORDS, numEvents), &numEvents);
-                            for (event = 0; event < numEvents && is_native_key ^ 1; event++)
+                            for (event = 0; event < numEvents && !is_native_key; event++)
                                 switch(inputRecords[event].EventType)
                                     {
                                         case KEY_EVENT:
