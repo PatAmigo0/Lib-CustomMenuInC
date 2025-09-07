@@ -1,3 +1,9 @@
+/**
+ * Made by Arseniy Kuskov
+ * This file has no copyright assigned and is placed in the Public Domain.
+ * No warranty is given.
+ */
+
 #include "menu.h"
 
 /* ============== DEFINES AND MACROS ============== */
@@ -8,7 +14,7 @@
 #endif
 
 #define DISABLED -1
-#define BUFFER_CAPACITY 128
+#define BUFFER_CAPACITY 256 // Increased for safety with padding
 #define UPDATE_FREQUENCE 2147483647 // ms
 #define ERROR_UPDATE_FREQUENCE 20 // ms
 #define EVENT_MAX_RECORDS 4
@@ -122,12 +128,13 @@ static void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char
 static void _vwrite_string(HANDLE hDestination, const char* restrict text, va_list args);
 static void _lwrite_string(HANDLE hDestination, const char* restrict text);
 
+static size_t _count_utf8_chars(const char* s);
 static void _clamp_center_coord(MENU_COORD* coord);
 static WORD _check_if_supports_vt100();
 static HANDLE _find_first_active_menu_buffer();
 
 static void _setConsoleActiveScreenBuffer(HANDLE hBufferToActivate);
-static void _getMenuSize(MENU menu);
+static void _get_menu_size(MENU menu);
 static int _size_check(MENU menu);
 static void _initWindow(SMALL_RECT* restrict window, COORD size);
 static void _clear_buffer(HANDLE hBuffer);
@@ -139,6 +146,7 @@ static void _draw_render_unit(MENU_RENDER_ARGUMENT rargument, COORD pos, PMENU_R
 static void _renderMenu(const MENU used_menu);
 static void _show_error_and_wait_extended(MENU menu);
 static COORD _calculate_start_coordinates(MENU menu, COORD current_size);
+static void _update_formatted_strings(MENU menu);
 
 // LEGACY FUNCTIONS
 static void _clear_buffer_legacy(HANDLE hBuffer);
@@ -236,7 +244,10 @@ MENU create_menu()
     new_menu->header = DEFAULT_HEADER_TEXT;
     new_menu->footer = DEFAULT_FOOTER_TEXT;
 
-    _getMenuSize(new_menu);
+    new_menu->formatted_header = NULL;
+    new_menu->formatted_header = NULL;
+
+    _get_menu_size(new_menu);
 
     menus_array = (MENU*)_safe_realloc(menus_array, (menus_amount + 1) * sizeof(MENU));
     menus_array[menus_amount++] = new_menu;
@@ -248,7 +259,7 @@ MENU_ITEM create_menu_item(const char* restrict text, __menu_callback callback, 
 {
     MENU_ITEM item = (MENU_ITEM)_safe_malloc(sizeof(struct __menu_item));
     item->text = text ? text : DEFAULT_MENU_TEXT;
-    item->text_len = strlen(item->text) - 1;
+    item->text_len = _count_utf8_chars(item->text);
     item->boundaries = (COORD)
     {
         item->text_len, 0
@@ -310,17 +321,19 @@ void add_option(MENU used_menu, const MENU_ITEM item)
     used_menu->options = new_options;
     used_menu->options[used_menu->count] = item;
     used_menu->count = new_size;
-    _getMenuSize(used_menu);
+    _get_menu_size(used_menu);
 }
 
 void change_header(MENU used_menu, const char* restrict text)
 {
     used_menu->header = text;
+    _get_menu_size(used_menu);
 }
 
 void change_footer(MENU used_menu, const char* restrict text)
 {
     used_menu->footer = text;
+    _get_menu_size(used_menu);
 }
 
 void enable_menu(MENU used_menu)
@@ -332,9 +345,7 @@ void enable_menu(MENU used_menu)
         }
 
     if (_size_check(used_menu))
-        {
-            _show_error_and_wait_extended(used_menu);
-        }
+        _show_error_and_wait_extended(used_menu);
 
     used_menu->running = 1;
     used_menu->selected_index = 0;
@@ -356,7 +367,7 @@ void clear_option(MENU used_menu, MENU_ITEM option_to_clear)
                 if (elements_to_move > 0) memmove(&o[i], &o[i+1], elements_to_move * sizeof(MENU_ITEM));
 
                 if (used_menu->selected_index >= used_menu->count) used_menu->selected_index--;
-                _getMenuSize(used_menu);
+                _get_menu_size(used_menu);
 
                 if (used_menu->count <= 0) clear_menu(used_menu);
                 else used_menu->options = (MENU_ITEM*)_safe_realloc((void*)used_menu->options, used_menu->count * sizeof(MENU_ITEM));
@@ -379,6 +390,8 @@ void clear_menu(MENU menu_to_clear)
                     }
 
                 // free(m->color_object);
+                free(m->formatted_header);
+                free(m->formatted_footer);
 
                 if (m->hBuffer[0] != INVALID_HANDLE_VALUE) CloseHandle(m->hBuffer[0]);
                 if (m->hBuffer[1] != INVALID_HANDLE_VALUE) CloseHandle(m->hBuffer[1]);
@@ -399,7 +412,7 @@ void clear_menu(MENU menu_to_clear)
                 else
                     {
                         menus_array = (MENU*)_safe_realloc((void*)menus_array, menus_amount * sizeof(MENU));
-                        menus_array[0]->running = TRUE;	// in case so we always have something to hold our back
+                        menus_array[0]->running = TRUE; // in case so we always have something to hold our back
                     }
                 break;
             }
@@ -539,13 +552,9 @@ static WORD _check_if_supports_vt100()
 static void _init_wrapper_functions()
 {
     if (vt100_support && DEFAULT_LEGACY_SETTING ^ 1)
-        {
-            _clear_buffer_func = _clear_buffer;
-        }
+        _clear_buffer_func = _clear_buffer;
     else
-        {
-            _clear_buffer_func = _clear_buffer_legacy;
-        }
+        _clear_buffer_func = _clear_buffer_legacy;
 }
 
 // this function runs once for the entire program cycle
@@ -626,6 +635,22 @@ static void _lwrite_string(HANDLE hDestination, const char* text)
 }
 
 /* ---- Other Utilities ---- */
+// counts the number of visible characters in a UTF-8 encoded string
+static size_t _count_utf8_chars(const char* s)
+{
+    size_t count = 0;
+    while (*s)
+        {
+            // in UTF-8, only the first byte of a multi-byte sequence does not start with binary '10'xxxxx
+            if ((*s & 0xC0) != 0x80)
+                {
+                    count++;
+                }
+            s++;
+        }
+    return count;
+}
+
 static void _clamp_center_coord(MENU_COORD* coord)
 {
     // x
@@ -668,20 +693,39 @@ static void _setConsoleActiveScreenBuffer(HANDLE hBuffer)
     hCurrent = hBuffer;
 }
 
-static void _getMenuSize(MENU menu)
+static void _get_menu_size(MENU menu)
 {
-    int max_width = 1;
+    size_t max_width = 0;
+
+    // check width of all options
     for (int i = 0; i < menu->count; i++)
         {
-            int current_width = strlen(menu->options[i]->text);
+            size_t current_width = menu->options[i]->text_len;
             if (current_width > max_width) max_width = current_width;
         }
 
-    menu->menu_size.X = (max_width + 4);
-    menu->menu_size.Y = menu->count * 2 + 6;
+    // also check header and footer width to ensure menu is wide enough
+    if (menu->menu_settings.header_enabled)
+        {
+            size_t header_width = _count_utf8_chars(menu->header);
+            if (header_width > max_width) max_width = header_width;
+        }
+    if (menu->menu_settings.footer_enabled)
+        {
+            size_t footer_width = _count_utf8_chars(menu->footer);
+            if (footer_width > max_width) max_width = footer_width;
+        }
+
+    menu->menu_size.X = max_width + 4; // adding padding for " [ text ] " style
+    menu->menu_size.Y = menu->count + 2; // base height: options + top/bottom borders
+
+    if (menu->menu_settings.header_enabled) menu->menu_size.Y += 2; // add space for header and a blank line
+    if (menu->menu_settings.footer_enabled) menu->menu_size.Y += 2; // add space for footer and a blank line
 
     menu->halt_size.X = menu->menu_size.X / 2;
-    menu->halt_size.Y = menu->menu_size.Y / 2 - OFFSET_VALUE;
+    menu->halt_size.Y = menu->menu_size.Y / 2;
+
+    _update_formatted_strings(menu);
 }
 
 static int _size_check(MENU menu)
@@ -881,30 +925,37 @@ static COORD _calculate_start_coordinates(MENU menu, COORD current_size)
 static void _draw_render_unit(MENU_RENDER_ARGUMENT rargument, COORD pos, PMENU_RENDER_UNIT render_unit)
 {
     HANDLE backBuffer;
-    // size_t space = 0;
+    MENU_COLOR menu_color;
+
     if (rargument.tag == MENU_TYPE)
         {
+            menu_color = rargument.value.menu->color_object;
             backBuffer = rargument.value.menu->hBuffer[rargument.value.menu->active_buffer ^ 1];
         }
     else
-        backBuffer = rargument.value.handle;
+        {
+            menu_color = MENU_DEFAULT_COLOR; // fallback for non-menu contexts jic
+            backBuffer = rargument.value.handle;
+        }
 
     DWORD unit_type = render_unit->unit_type;
-    const char option_text[BUFFER_CAPACITY];
+    const char* color_seq = "";
+
     switch (unit_type)
         {
             case (HEADER_TYPE): // HEADER
             case (FOOTER_TYPE): // FOOTER
-                _draw_at_position(backBuffer, pos.X, pos.Y, "%s", render_unit->text);
+                _ldraw_at_position(backBuffer, pos.X, pos.Y, render_unit->text);
                 break;
             case (SELECTABLE_TYPE): // SELECTABLE (option)
-                memset((void*)option_text, '\0', BUFFER_CAPACITY);
-                if (*((WORD*)render_unit->extra_data))
-                    _draw_at_position(backBuffer, pos.X, pos.Y, "%s%s"RESET_ALL_STYLES, rargument.value.menu->color_object.optionColor.__rgb_seq, render_unit->text);
+                if (*((WORD*)render_unit->extra_data))   // is selected
+                    {
+                        color_seq = menu_color.optionColor.__rgb_seq;
+                        _draw_at_position(backBuffer, pos.X, pos.Y, "%s%s"RESET_ALL_STYLES, color_seq, render_unit->text);
+                    }
                 else
                     _ldraw_at_position(backBuffer, pos.X, pos.Y, render_unit->text);
                 break;
-                // more complex logic to come yet... AFTER I DEAL WITH MY POOR MADE CODEEEEEEEEEEEEEEE
         }
 }
 
@@ -944,7 +995,6 @@ static void _draw_render_unit_legacy(MENU_RENDER_ARGUMENT rargument, COORD pos, 
                 break;
         }
 
-    // shitty optimization
     if (text_color == reset_color_attribute)
         _ldraw_at_position(backBuffer, pos.X, pos.Y, render_unit->text);
     else
@@ -959,48 +1009,28 @@ static void _renderMenu(const MENU used_menu)
 {
     if (!used_menu) return;
 
-    // REGISTER VARIABLES BLOCK
-    COORD current_size, // current console window dimensions (X=width, Y=height)
-          old_size,    // previous console window dimensions before resize
-          start;       // top-left rendering position for the menu
-    int y_max,         // maximum Y coordinate of menu options (bottom boundary)
-        y_min,         // minimum Y coordinate of menu options (top boundary)
-        x_max;         // maximum X coordinate of menu options (right boundary)
-    int size_check,   // flag: TRUE if console size is too small for menu display
-        mouse_input_enabled; // flag: TRUE if mouse input is enabled for this menu
-
     // BASIC VARIABLES BLOCK
-    int y,                      // current Y position for rendering menu items
-        x,                      // current X position for rendering menu items
-        i,                      // loop counter for menu options iteration
-        last_selected_index,    // previously selected menu option index
-        selected_index,			// a variable for storing the current index of the option pointed to by the mouse
-        spaces;                 // number of spaces for centering header/footer text
+    COORD current_size, old_size, start;
+    int y_max, y_min, x_max;
+    int size_check, mouse_input_enabled;
+    int y, x, i, last_selected_index, selected_index;
 
     unsigned long long saved_id; // saved menu ID to verify menu validity after callbacks
     static int something_is_selected; // static flag persisting between function calls (indicates if any option is visually selected)
 
-    HANDLE hBackBuffer;         // handle to store the back buffer for double-buffered rendering
-    CONSOLE_SCREEN_BUFFER_INFO csbi; // console screen buffer information structure
-    SMALL_RECT new_window;      // new window dimensions after resize operations
-    COORD menu_size,            // dimensions of the menu content (not the console window)
-          mouse_pos;			// a variable to store the mouse position
+    HANDLE hBackBuffer;
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    SMALL_RECT new_window;
+    COORD menu_size, mouse_pos;
 
-    DWORD old_mode,             // previous console input mode (saved for restoration)
-          numEvents,            // number of console input events to process
-          event,                // loop counter for processing input events
-          waitResult;			// WaitForSignalObject result event value
-    WORD vk;                    // virtual key code for keyboard events
-    INPUT_RECORD inputRecords[EVENT_MAX_RECORDS]; // an array to store console input events
-
-    // const char* format;         // format string for rendering menu options (with/without selection highlighting)
-    char header[BUFFER_CAPACITY], // buffer for rendered header string
-         footer[BUFFER_CAPACITY]; // buffer for rendered footer string
+    DWORD old_mode, numEvents, event, waitResult;
+    WORD vk;
+    INPUT_RECORD inputRecords[EVENT_MAX_RECORDS];
 
 #ifdef DEBUG
-    int mouse_status;           // current mouse button state
-    size_t tick_count;          // counter for debug rendering iterations
-    COORD debug_mouse_pos;      // current mouse position
+    int mouse_status;
+    size_t tick_count;
+    COORD debug_mouse_pos;
 #endif
 
     GetConsoleScreenBufferInfo(hCurrent, &csbi);
@@ -1021,34 +1051,15 @@ static void _renderMenu(const MENU used_menu)
 
     MENU_RENDER_ARGUMENT rargument = _create_render_argument(MENU_TYPE, used_menu);
 
-    spaces = (menu_size.X - 6) / 2;
-
     // predefined render units
     MENU_RENDER_UNIT header_render_unit = _create_render_unit("", HEADER_TYPE, NULL);
     MENU_RENDER_UNIT option_render_unit = _create_render_unit("", SELECTABLE_TYPE, NULL);
     MENU_RENDER_UNIT footer_render_unit = _create_render_unit("", FOOTER_TYPE, NULL);
 
-    // wrapper functions
-    RenderUnitDrawer _draw_render_unit_func;
+    RenderUnitDrawer _draw_render_unit_func = (vt100_support && used_menu->menu_settings.force_legacy_mode ^ 1)
+            ? _draw_render_unit
+            : _draw_render_unit_legacy;
 
-    // setting some shit
-    // this is a temporary solution i swear please dont bully me
-    if (vt100_support && used_menu->menu_settings.force_legacy_mode ^ 1)
-        {
-            snprintf(header, sizeof(header), "%s%*s%s%*s" RESET_ALL_STYLES, used_menu->color_object.headerColor.__rgb_seq,
-                     spaces, "", used_menu->header, spaces, "");
-            snprintf(footer, sizeof(footer), "%s%-*s" RESET_ALL_STYLES, used_menu->color_object.footerColor.__rgb_seq,
-                     menu_size.X - 4, used_menu->footer);
-            _draw_render_unit_func = _draw_render_unit;
-        }
-    else
-        {
-            strcpy(header, used_menu->header);
-            strcpy(footer, used_menu->footer);
-            _draw_render_unit_func = _draw_render_unit_legacy;
-        }
-
-    // debug values
 #ifdef DEBUG
     tick_count = 0;
     debug_mouse_pos = (COORD)
@@ -1085,7 +1096,7 @@ static void _renderMenu(const MENU used_menu)
                     SetConsoleScreenBufferSize(used_menu->hBuffer[1], current_size);
                     SetConsoleWindowInfo(used_menu->hBuffer[0], TRUE, &new_window);
                     SetConsoleWindowInfo(used_menu->hBuffer[1], TRUE, &new_window);
-                    FlushConsoleInputBuffer(hStdin); // so we wont have events recursion -.-
+                    FlushConsoleInputBuffer(hStdin);
                     used_menu->need_redraw = 1;
                 }
             if (used_menu->need_redraw)
@@ -1093,14 +1104,12 @@ static void _renderMenu(const MENU used_menu)
                     hBackBuffer = used_menu->hBuffer[used_menu->active_buffer ^ 1];
                     _clear_buffer_func(hBackBuffer);
                     start = _calculate_start_coordinates(used_menu, current_size);
+
 #ifdef DEBUG
                     _draw_at_position(hBackBuffer, 0, 0, "__ID: %llu", used_menu->__ID);
                     _draw_at_position(hBackBuffer, 0, 2, "SELECTED: %d", something_is_selected);
-                    _draw_at_position(hBackBuffer, 0, 4, "tick: %llu", tick_count);
                     _draw_at_position(hBackBuffer, 0, 6, "WINDOW SIZE: %d %d ", current_size.X, current_size.Y);
-                    _draw_at_position(hBackBuffer, 0, 8, "need redraw: %d", used_menu->need_redraw);
-                    _draw_at_position(hBackBuffer, 0, 10, "MOUSE POS: %d %d   ", debug_mouse_pos.X, debug_mouse_pos.Y);
-                    _draw_at_position(hBackBuffer, 0, 12, "mouse status: %d", mouse_status);
+                    _draw_at_position(hBackBuffer, 0, 10, "MOUSE POS: %d %d    ", debug_mouse_pos.X, debug_mouse_pos.Y);
                     _draw_at_position(hBackBuffer, 0, 14, "menus_amount: %d", menus_amount);
                     _print_memory_info(hBackBuffer); // -> 30
                     _draw_at_position(hBackBuffer, 0, 32, "menus start coord: %d %d", start.X, start.Y);
@@ -1109,18 +1118,17 @@ static void _renderMenu(const MENU used_menu)
                     // header
                     if (used_menu->menu_settings.header_enabled)
                         {
-                            header_render_unit.text = header;
+                            header_render_unit.text = used_menu->formatted_header;
                             _draw_render_unit_func(rargument,
                                                    (COORD)
                             {
-                                start.X, start.Y
+                                start.X + 2, start.Y + 1
                             }, &header_render_unit);
                         }
-                    else start.Y -= 2;
 
                     // options
                     x = start.X + 2;
-                    y = y_min = start.Y + 2;
+                    y = y_min = start.Y + (used_menu->menu_settings.header_enabled ? 3 : 1);
                     x_max = 0;
 
                     for (i = 0; i < used_menu->count; i++, y++)
@@ -1146,11 +1154,11 @@ static void _renderMenu(const MENU used_menu)
                     // footer
                     if (used_menu->menu_settings.footer_enabled)
                         {
-                            footer_render_unit.text = footer;
+                            footer_render_unit.text = used_menu->formatted_footer;
                             _draw_render_unit_func(rargument,
                                                    (COORD)
                             {
-                                start.X, y + 1
+                                start.X + 2, y + 1
                             }, &footer_render_unit);
                         }
 
@@ -1159,8 +1167,8 @@ static void _renderMenu(const MENU used_menu)
                     used_menu->need_redraw = FALSE;
                 }
 
-            // events handling time, bitch
-            waitResult = WaitForSingleObject(hStdin, UPDATE_FREQUENCE); // waiting until dinosaurs extinct again or something cool happens
+            // events handling
+            waitResult = WaitForSingleObject(hStdin, UPDATE_FREQUENCE);
             if (waitResult == WAIT_OBJECT_0)
                 {
                     if (GetNumberOfConsoleInputEvents(hStdin, &numEvents))
@@ -1240,14 +1248,13 @@ static void _renderMenu(const MENU used_menu)
 #ifdef DEBUG
                                             debug_mouse_pos = inputRecords[event].Event.MouseEvent.dwMousePosition;
                                             mouse_status = inputRecords[event].Event.MouseEvent.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED;
-                                            _draw_at_position(hCurrent, 0, 10, "MOUSE POS: %d %d   ", debug_mouse_pos.X, debug_mouse_pos.Y);
+                                            _draw_at_position(hCurrent, 0, 10, "MOUSE POS: %d %d    ", debug_mouse_pos.X, debug_mouse_pos.Y);
 #endif
                                             if (mouse_input_enabled)
                                                 {
                                                     if (mouse_option_selected ^ TRUE)
                                                         {
                                                             mouse_pos = inputRecords[event].Event.MouseEvent.dwMousePosition;
-                                                            // checking boundaries
                                                             if (mouse_pos.Y < y_max && mouse_pos.Y >= y_min
                                                                     && mouse_pos.X >= x && mouse_pos.X <= x_max) // check if mouse is within the menu options boundaries
                                                                 {
@@ -1264,7 +1271,6 @@ static void _renderMenu(const MENU used_menu)
                                                                         }
                                                                 }
                                                         }
-                                                    // if nothing was selected but was selected before then resetting this "before"
                                                     if (mouse_option_selected ^ TRUE && something_is_selected)
                                                         {
                                                             something_is_selected = FALSE;
@@ -1275,7 +1281,7 @@ static void _renderMenu(const MENU used_menu)
                                                     if (inputRecords[event].Event.MouseEvent.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED && holding ^ 1)
                                                         {
                                                             holding = TRUE;
-                                                            if (something_is_selected) goto input_handler; // handling the input
+                                                            if (something_is_selected) goto input_handler;
                                                         }
                                                     else if (inputRecords[event].Event.MouseEvent.dwButtonState == 0) holding = FALSE;
                                                 }
@@ -1289,10 +1295,64 @@ static void _renderMenu(const MENU used_menu)
                 }
         }
 end_render_loop:; // anchor
-    // cleanup
     FlushConsoleInputBuffer(hStdin);
     SetConsoleMode(hStdin, old_mode);
     if (menus_amount == 0)
         _setConsoleActiveScreenBuffer(hConsole);
     else _setConsoleActiveScreenBuffer(_find_first_active_menu_buffer());
+}
+
+// TODO: check
+static void _update_formatted_strings(MENU menu)
+{
+    free(menu->formatted_header);
+    free(menu->formatted_footer);
+
+    // determine the inner width for text content, ensuring its not negative
+    size_t inner_width = menu->menu_size.X > 4 ? menu->menu_size.X - 4 : 0;
+
+    // determine if we are using modern VT100 rendering or legacy
+    int use_vt100 = vt100_support && (menu->menu_settings.force_legacy_mode ^ 1);
+
+    // size is menu_size.X (visual width) * 4 (max UTF-8 bytes) + color codes + null terminator
+    size_t buffer_size = menu->menu_size.X * 4 + MAX_RGB_LEN * 2;
+    menu->formatted_header = _safe_malloc(buffer_size);
+    menu->formatted_footer = _safe_malloc(buffer_size);
+
+    // format Header
+    size_t header_text_len = _count_utf8_chars(menu->header);
+    size_t header_pad_left = (inner_width > header_text_len) ? (inner_width - header_text_len) / 2 : 0;
+    size_t header_pad_right = (inner_width > header_text_len) ? (inner_width - header_text_len - header_pad_left) : 0;
+
+    if (use_vt100)
+        {
+            snprintf(menu->formatted_header, buffer_size, "%s%*s%s%*s" RESET_ALL_STYLES,
+                     menu->color_object.headerColor.__rgb_seq,
+                     (int)header_pad_left, "", menu->header, (int)header_pad_right, "");
+        }
+    else
+        {
+            snprintf(menu->formatted_header, buffer_size, "%*s%s%*s",
+                     (int)header_pad_left, "", menu->header, (int)header_pad_right, "");
+        }
+
+    // format Footer
+    size_t footer_text_len = _count_utf8_chars(menu->footer);
+    size_t footer_pad_left = (inner_width > footer_text_len) ? (inner_width - footer_text_len) / 2 : 0;
+    size_t footer_pad_right = (inner_width > footer_text_len) ? (inner_width - footer_text_len - footer_pad_left) : 0;
+
+    if (use_vt100)
+        snprintf(menu->formatted_footer, buffer_size, "%s%*s%s%*s" RESET_ALL_STYLES,
+                 menu->color_object.footerColor.__rgb_seq,
+                 (int)footer_pad_left, "", menu->footer, (int)footer_pad_right, "");
+    else
+        snprintf(menu->formatted_footer, buffer_size, "%*s%s%*s",
+                 (int)footer_pad_left, "", menu->footer, (int)footer_pad_right, "");
+
+    // saving up some bytes
+    size_t new_header_len = strlen(menu->formatted_header);
+    size_t new_footer_len = strlen(menu->formatted_footer);
+
+    menu->formatted_header = realloc(menu->formatted_header, new_header_len);
+    menu->formatted_footer = realloc(menu->formatted_footer, new_footer_len);
 }
