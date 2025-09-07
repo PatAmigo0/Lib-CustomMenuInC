@@ -33,14 +33,14 @@
 /* ============== CONSTANTS & MACROS ============== */
 // Color Definitions
 // text Colors (Foreground)
-#define BLACK_TEXT          "\033[30m"
-#define RED_TEXT            "\033[31m"
-#define GREEN_TEXT          "\033[32m"
-#define YELLOW_TEXT         "\033[33m"
-#define BLUE_TEXT           "\033[34m"
-#define MAGENTA_TEXT        "\033[35m"
-#define CYAN_TEXT           "\033[36m"
-#define WHITE_TEXT          "\033[37m"
+#define BLACK_TEXT        "\033[30m"
+#define RED_TEXT          "\033[31m"
+#define GREEN_TEXT        "\033[32m"
+#define YELLOW_TEXT       "\033[33m"
+#define BLUE_TEXT         "\033[34m"
+#define MAGENTA_TEXT      "\033[35m"
+#define CYAN_TEXT         "\033[36m"
+#define WHITE_TEXT        "\033[37m"
 
 #define BRIGHT_BLACK_TEXT   "\033[90m"
 #define BRIGHT_RED_TEXT     "\033[91m"
@@ -52,32 +52,32 @@
 #define BRIGHT_WHITE_TEXT   "\033[97m"
 
 // background Colors
-#define BLACK_BG           "\033[40m"
-#define RED_BG             "\033[41m"
-#define GREEN_BG           "\033[42m"
-#define YELLOW_BG          "\033[43m"
-#define BLUE_BG            "\033[44m"
-#define MAGENTA_BG         "\033[45m"
-#define CYAN_BG            "\033[46m"
-#define WHITE_BG           "\033[47m"
+#define BLACK_BG          "\033[40m"
+#define RED_BG            "\033[41m"
+#define GREEN_BG          "\033[42m"
+#define YELLOW_BG         "\033[43m"
+#define BLUE_BG           "\033[44m"
+#define MAGENTA_BG        "\033[45m"
+#define CYAN_BG           "\033[46m"
+#define WHITE_BG          "\033[47m"
 
-#define BRIGHT_BLACK_BG    "\033[100m"
-#define BRIGHT_RED_BG      "\033[101m"
-#define BRIGHT_GREEN_BG    "\033[102m"
-#define BRIGHT_YELLOW_BG   "\033[103m"
-#define BRIGHT_BLUE_BG     "\033[104m"
-#define BRIGHT_MAGENTA_BG  "\033[105m"
-#define BRIGHT_CYAN_BG     "\033[106m"
-#define BRIGHT_WHITE_BG    "\033[107m"
+#define BRIGHT_BLACK_BG   "\033[100m"
+#define BRIGHT_RED_BG     "\033[101m"
+#define BRIGHT_GREEN_BG   "\033[102m"
+#define BRIGHT_YELLOW_BG  "\033[103m"
+#define BRIGHT_BLUE_BG    "\033[104m"
+#define BRIGHT_MAGENTA_BG "\033[105m"
+#define BRIGHT_CYAN_BG    "\033[106m"
+#define BRIGHT_WHITE_BG   "\033[107m"
 
 // text Styles
-#define BOLD_TEXT          "\033[1m"
-#define DIM_TEXT           "\033[2m"
-#define ITALIC_TEXT        "\033[3m"
-#define UNDERLINE_TEXT     "\033[4m"
-#define BLINK_TEXT         "\033[5m"
-#define REVERSE_TEXT       "\033[7m"  // swap foreground and background
-#define HIDDEN_TEXT        "\033[8m"
+#define BOLD_TEXT         "\033[1m"
+#define DIM_TEXT          "\033[2m"
+#define ITALIC_TEXT       "\033[3m"
+#define UNDERLINE_TEXT    "\033[4m"
+#define BLINK_TEXT        "\033[5m"
+#define REVERSE_TEXT      "\033[7m"  // swap foreground and background
+#define HIDDEN_TEXT       "\033[8m"
 #define STRIKETHROUGH_TEXT "\033[9m"
 
 // combinations
@@ -180,9 +180,9 @@ typedef struct
 typedef struct __menu_item
 {
     COORD boundaries;
-    int text_len;
+    int text_len; // Visual length in characters, not bytes
     const char* text;
-    void (*callback)(struct __menu*, void*); //
+    void (*callback)(struct __menu*, void*);
     void* data_chunk;
 } *MENU_ITEM;
 
@@ -222,7 +222,7 @@ typedef struct __menu_settings
 typedef struct __menu_render_unit
 {
     const char* text;
-    DWORD unit_type; // for the future (like heade = 0x1, footer and etc)
+    DWORD unit_type;
     void* extra_data;
 } MENU_RENDER_UNIT;
 
@@ -265,6 +265,9 @@ typedef struct __menu
 
     const char* footer;
     const char* header;
+
+    char* formatted_header;
+    char* formatted_footer;
 
     // objects
     MENU_SETTINGS menu_settings;
@@ -318,3 +321,4 @@ double tick();
 static MENU_RENDER_UNIT_TYPES mrut;
 
 #endif
+
