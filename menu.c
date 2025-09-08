@@ -14,7 +14,7 @@
 #endif
 
 #define DISABLED -1
-#define BUFFER_CAPACITY 256 // Increased for safety with padding
+#define BUFFER_CAPACITY 256
 #define UPDATE_FREQUENCE 2147483647 // ms
 #define ERROR_UPDATE_FREQUENCE 20 // ms
 #define EVENT_MAX_RECORDS 4
@@ -111,6 +111,20 @@ ClearBufferFunc _clear_buffer_func;
 #ifdef DEBUG
 static void _print_memory_info(HANDLE hBuffer);
 #endif
+
+// NEW: Define the function pointer type for the mouse handler
+typedef int (*MouseEventHandler)(MENU used_menu, const MOUSE_EVENT_RECORD* event,
+                                 int y_min, int y_max, int x, int x_max,
+                                 int* last_selected_index, int* something_is_selected, int* holding);
+
+// NEW: Declare the two handler functions
+static int _handle_mouse_event_enabled(MENU used_menu, const MOUSE_EVENT_RECORD* event,
+                                       int y_min, int y_max, int x, int x_max,
+                                       int* last_selected_index, int* something_is_selected, int* holding);
+static int _handle_mouse_event_disabled(MENU used_menu, const MOUSE_EVENT_RECORD* event,
+                                        int y_min, int y_max, int x, int x_max,
+                                        int* last_selected_index, int* something_is_selected, int* holding);
+
 
 static void* _safe_malloc(size_t _size);
 static void* _safe_realloc(void* _mem_to_realloc, size_t _size);
@@ -784,6 +798,59 @@ static void _clear_buffer_legacy(HANDLE hBuffer)
         }
 }
 
+// implementation of the disabled mouse handler
+static int _handle_mouse_event_disabled(MENU used_menu, const MOUSE_EVENT_RECORD* event,
+                                        int y_min, int y_max, int x, int x_max,
+                                        int* last_selected_index, int* something_is_selected, int* holding)
+{
+    // idc ig
+    return FALSE;
+}
+
+// implementation of the enabled mouse handler
+static int _handle_mouse_event_enabled(MENU used_menu, const MOUSE_EVENT_RECORD* event,
+                                       int y_min, int y_max, int x, int x_max,
+                                       int* last_selected_index, int* something_is_selected, int* holding)
+{
+    int mouse_option_selected = FALSE;
+    COORD mouse_pos = event->dwMousePosition;
+
+    if (mouse_pos.Y < y_max && mouse_pos.Y >= y_min && mouse_pos.X >= x && mouse_pos.X <= x_max)
+        {
+            int selected_index = mouse_pos.Y - y_min;
+            if (mouse_pos.X <= used_menu->options[selected_index]->boundaries.X)
+                {
+                    used_menu->selected_index = selected_index;
+                    mouse_option_selected = *something_is_selected = TRUE;
+                    if (*last_selected_index != selected_index)
+                        {
+                            used_menu->need_redraw = TRUE;
+                            *last_selected_index = selected_index;
+                        }
+                }
+        }
+
+    if (!mouse_option_selected && *something_is_selected)
+        {
+            *something_is_selected = FALSE;
+            used_menu->need_redraw = TRUE;
+            used_menu->selected_index = DISABLED;
+            *last_selected_index = DISABLED;
+        }
+
+    if (event->dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED && !(*holding))
+        {
+            *holding = TRUE;
+            if (*something_is_selected)
+                return TRUE; // signal to jump to the input handler
+        }
+    else if (event->dwButtonState == 0)
+        *holding = FALSE;
+
+    return FALSE; // signal to continue the loop
+}
+
+
 /* ----- Input Handling ----- */
 static void _block_input(DWORD* oldMode)
 {
@@ -1012,11 +1079,14 @@ static void _renderMenu(const MENU used_menu)
     // BASIC VARIABLES BLOCK
     COORD current_size, old_size, start;
     int y_max, y_min, x_max;
-    int size_check, mouse_input_enabled;
-    int y, x, i, last_selected_index, selected_index;
+    int size_check;
+    int y, x, i, last_selected_index;
 
     unsigned long long saved_id; // saved menu ID to verify menu validity after callbacks
     static int something_is_selected; // static flag persisting between function calls (indicates if any option is visually selected)
+
+    // declare the function pointer
+    MouseEventHandler mouse_event_handler;
 
     HANDLE hBackBuffer;
     CONSOLE_SCREEN_BUFFER_INFO csbi;
@@ -1043,11 +1113,9 @@ static void _renderMenu(const MENU used_menu)
 
     menu_size = used_menu->menu_size;
     saved_id = used_menu->__ID;
-    mouse_input_enabled = used_menu->menu_settings.mouse_enabled;
     used_menu->need_redraw = TRUE;
 
-    selected_index = mouse_input_enabled ? DISABLED : 0;
-    used_menu->selected_index = selected_index;
+    used_menu->selected_index = used_menu->menu_settings.mouse_enabled ? DISABLED : 0;
 
     MENU_RENDER_ARGUMENT rargument = _create_render_argument(MENU_TYPE, used_menu);
 
@@ -1059,6 +1127,12 @@ static void _renderMenu(const MENU used_menu)
     RenderUnitDrawer _draw_render_unit_func = (vt100_support && used_menu->menu_settings.force_legacy_mode ^ 1)
             ? _draw_render_unit
             : _draw_render_unit_legacy;
+
+    // assign the correct mouse handler ONCE before the loop starts
+    if (used_menu->menu_settings.mouse_enabled)
+        mouse_event_handler = _handle_mouse_event_enabled;
+    else
+        mouse_event_handler = _handle_mouse_event_disabled;
 
 #ifdef DEBUG
     tick_count = 0;
@@ -1145,7 +1219,7 @@ static void _renderMenu(const MENU used_menu)
 
                             // boundaries calc
                             used_menu->options[i]->boundaries.Y = y;
-                            used_menu->options[i]->boundaries.X = x + used_menu->options[i]->text_len;
+                            used_menu->options[i]->boundaries.X = x + used_menu->options[i]->text_len - 1;
                             if (used_menu->options[i]->boundaries.X > x_max)
                                 x_max = used_menu->options[i]->boundaries.X;
                         }
@@ -1173,18 +1247,15 @@ static void _renderMenu(const MENU used_menu)
                 {
                     if (GetNumberOfConsoleInputEvents(hStdin, &numEvents))
                         {
-                            int is_native_key = FALSE;
-                            int mouse_option_selected = FALSE;
                             ReadConsoleInput(hStdin, inputRecords, min(EVENT_MAX_RECORDS, numEvents), &numEvents);
-                            for (event = 0; event < numEvents && !is_native_key; event++)
+                            for (event = 0; event < numEvents; event++)
                                 switch(inputRecords[event].EventType)
                                     {
                                         case KEY_EVENT:
                                             if (inputRecords[event].Event.KeyEvent.bKeyDown)
                                                 {
                                                     vk = inputRecords[event].Event.KeyEvent.wVirtualKeyCode;
-                                                    is_native_key = (vk == VK_UP) || (vk == VK_DOWN) || (vk == VK_RETURN) || (vk == VK_ESCAPE) || (vk == VK_DELETE);
-                                                    if (is_native_key)
+                                                    if ((vk == VK_UP) || (vk == VK_DOWN) || (vk == VK_RETURN) || (vk == VK_ESCAPE) || (vk == VK_DELETE))
                                                         {
                                                             used_menu->need_redraw = TRUE;
                                                             switch (vk)
@@ -1241,6 +1312,7 @@ static void _renderMenu(const MENU used_menu)
 #endif
                                                                 }
                                                             FlushConsoleInputBuffer(hStdin);
+                                                            goto next_event_iteration; // break from key handling to avoid processing other events in this batch
                                                         }
                                                 }
                                             break;
@@ -1250,46 +1322,20 @@ static void _renderMenu(const MENU used_menu)
                                             mouse_status = inputRecords[event].Event.MouseEvent.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED;
                                             _draw_at_position(hCurrent, 0, 10, "MOUSE POS: %d %d    ", debug_mouse_pos.X, debug_mouse_pos.Y);
 #endif
-                                            if (mouse_input_enabled)
+                                            // a single, unconditional function call
+                                            if (mouse_event_handler(used_menu, &inputRecords[event].Event.MouseEvent,
+                                                                    y_min, y_max, x, x_max,
+                                                                    &last_selected_index, &something_is_selected, &holding))
                                                 {
-                                                    if (mouse_option_selected ^ TRUE)
-                                                        {
-                                                            mouse_pos = inputRecords[event].Event.MouseEvent.dwMousePosition;
-                                                            if (mouse_pos.Y < y_max && mouse_pos.Y >= y_min
-                                                                    && mouse_pos.X >= x && mouse_pos.X <= x_max) // check if mouse is within the menu options boundaries
-                                                                {
-                                                                    selected_index = mouse_pos.Y - y_min;
-                                                                    if (mouse_pos.X <= used_menu->options[selected_index]->boundaries.X)
-                                                                        {
-                                                                            used_menu->selected_index = selected_index;
-                                                                            mouse_option_selected = something_is_selected = is_native_key = TRUE;
-                                                                            if (last_selected_index != selected_index)
-                                                                                {
-                                                                                    used_menu->need_redraw = TRUE;
-                                                                                    last_selected_index = selected_index;
-                                                                                }
-                                                                        }
-                                                                }
-                                                        }
-                                                    if (mouse_option_selected ^ TRUE && something_is_selected)
-                                                        {
-                                                            something_is_selected = FALSE;
-                                                            used_menu->need_redraw = TRUE;
-                                                            used_menu->selected_index = DISABLED;
-                                                            last_selected_index = DISABLED;
-                                                        }
-                                                    if (inputRecords[event].Event.MouseEvent.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED && holding ^ 1)
-                                                        {
-                                                            holding = TRUE;
-                                                            if (something_is_selected) goto input_handler;
-                                                        }
-                                                    else if (inputRecords[event].Event.MouseEvent.dwButtonState == 0) holding = FALSE;
+                                                    goto input_handler;
                                                 }
                                             break;
                                         case WINDOW_BUFFER_SIZE_EVENT:
                                             current_size = inputRecords[event].Event.WindowBufferSizeEvent.dwSize;
                                             break;
                                     }
+                        next_event_iteration:
+                            ;
                         }
                     FlushConsoleInputBuffer(hStdin);
                 }
@@ -1325,16 +1371,12 @@ static void _update_formatted_strings(MENU menu)
     size_t header_pad_right = (inner_width > header_text_len) ? (inner_width - header_text_len - header_pad_left) : 0;
 
     if (use_vt100)
-        {
-            snprintf(menu->formatted_header, buffer_size, "%s%*s%s%*s" RESET_ALL_STYLES,
-                     menu->color_object.headerColor.__rgb_seq,
-                     (int)header_pad_left, "", menu->header, (int)header_pad_right, "");
-        }
+        snprintf(menu->formatted_header, buffer_size, "%s%*s%s%*s" RESET_ALL_STYLES,
+                 menu->color_object.headerColor.__rgb_seq,
+                 (int)header_pad_left, "", menu->header, (int)header_pad_right, "");
     else
-        {
-            snprintf(menu->formatted_header, buffer_size, "%*s%s%*s",
-                     (int)header_pad_left, "", menu->header, (int)header_pad_right, "");
-        }
+        snprintf(menu->formatted_header, buffer_size, "%*s%s%*s",
+                 (int)header_pad_left, "", menu->header, (int)header_pad_right, "");
 
     // format Footer
     size_t footer_text_len = _count_utf8_chars(menu->footer);
@@ -1348,11 +1390,4 @@ static void _update_formatted_strings(MENU menu)
     else
         snprintf(menu->formatted_footer, buffer_size, "%*s%s%*s",
                  (int)footer_pad_left, "", menu->footer, (int)footer_pad_right, "");
-
-    // saving up some bytes
-    size_t new_header_len = strlen(menu->formatted_header);
-    size_t new_footer_len = strlen(menu->formatted_footer);
-
-    menu->formatted_header = realloc(menu->formatted_header, new_header_len);
-    menu->formatted_footer = realloc(menu->formatted_footer, new_footer_len);
 }
