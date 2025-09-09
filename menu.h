@@ -180,6 +180,7 @@ typedef struct
 typedef struct __menu_item
 {
     COORD boundaries;
+    int x_position;
     int text_len; // Visual length in characters, not bytes
     const char* text;
     void (*callback)(struct __menu*, void*);
@@ -249,6 +250,8 @@ typedef struct __menu
     WORD count;
     MENU_ITEM* options;
     int active_buffer;
+    size_t capacity;
+    struct __menu** next; // ** cuz MENU is * and pointer is *
 
     // boolean
     int running;
@@ -265,6 +268,8 @@ typedef struct __menu
 
     const char* footer;
     const char* header;
+    size_t footer_len;
+    size_t header_len;
 
     char* formatted_header;
     char* formatted_footer;
