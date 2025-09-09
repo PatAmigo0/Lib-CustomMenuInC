@@ -18,6 +18,8 @@
 #define UPDATE_FREQUENCE 2147483647 // ms
 #define ERROR_UPDATE_FREQUENCE 20 // ms
 #define EVENT_MAX_RECORDS 4
+#define CAPACITY_MIN 6
+#define CAPACITY_STEP 4
 #define OFFSET_VALUE 2
 
 #define DEFAULT_HEADER_TEXT "MENU"
@@ -25,6 +27,8 @@
 #define DEFAULT_MENU_TEXT "Unnamed Option"
 
 #define LOG_FILE_NAME "menu_log.txt"
+#define VT100_MENU_STRING_FORMAT "%s%*s%s%*s"RESET_ALL_STYLES
+#define LEGACY_MENU_STRING_FORMAT "%*s%s%*s"
 #define RGB_COLOR_SEQUENCE "\x1b[%d;2;%d;%d;%dm"
 #define RGB_COLOR_DOUBLE_SEQUENCE "\x1b[38;2;%hd;%hd;%hdm\x1b[48;2;%hd;%hd;%hdm"
 #define ERROR_MESSAGE1 "\033[31mError: Console window size is too small!\n""Required size: %d x %d\n"
@@ -112,19 +116,16 @@ ClearBufferFunc _clear_buffer_func;
 static void _print_memory_info(HANDLE hBuffer);
 #endif
 
-// NEW: Define the function pointer type for the mouse handler
 typedef int (*MouseEventHandler)(MENU used_menu, const MOUSE_EVENT_RECORD* event,
                                  int y_min, int y_max, int x, int x_max,
                                  int* last_selected_index, int* something_is_selected, int* holding);
 
-// NEW: Declare the two handler functions
 static int _handle_mouse_event_enabled(MENU used_menu, const MOUSE_EVENT_RECORD* event,
                                        int y_min, int y_max, int x, int x_max,
                                        int* last_selected_index, int* something_is_selected, int* holding);
 static int _handle_mouse_event_disabled(MENU used_menu, const MOUSE_EVENT_RECORD* event,
                                         int y_min, int y_max, int x, int x_max,
                                         int* last_selected_index, int* something_is_selected, int* holding);
-
 
 static void* _safe_malloc(size_t _size);
 static void* _safe_realloc(void* _mem_to_realloc, size_t _size);
@@ -135,12 +136,12 @@ static MENU_RENDER_ARGUMENT _create_render_argument(enum RenderArgumentTag data_
 static unsigned long long _random_uint64_t();
 static void _init_menu_system();
 static void _init_hError();
-static HANDLE _createConsoleScreenBuffer(void);
+static HANDLE _createConsoleScreenBuffer();
 
 static void _draw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text, ...);
 static void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text);
 static void _vwrite_string(HANDLE hDestination, const char* restrict text, va_list args);
-static void _lwrite_string(HANDLE hDestination, const char* restrict text);
+inline static void _lwrite_string(HANDLE hDestination, const char* restrict text);
 
 static size_t _count_utf8_chars(const char* s);
 static void _clamp_center_coord(MENU_COORD* coord);
@@ -153,11 +154,11 @@ static int _size_check(MENU menu);
 static void _initWindow(SMALL_RECT* restrict window, COORD size);
 static void _clear_buffer(HANDLE hBuffer);
 static void _reset_mouse_state();
-static int _check_menu(unsigned long long saved_id);
+static MENU _find_menu_by_id(unsigned long long saved_id);
 static void _block_input(DWORD* oldMode);
 
 static void _draw_render_unit(MENU_RENDER_ARGUMENT rargument, COORD pos, PMENU_RENDER_UNIT render_unit);
-static void _renderMenu(const MENU used_menu);
+static void _renderMenu(MENU used_menu);
 static void _show_error_and_wait_extended(MENU menu);
 static COORD _calculate_start_coordinates(MENU menu, COORD current_size);
 static void _update_formatted_strings(MENU menu);
@@ -165,6 +166,10 @@ static void _update_formatted_strings(MENU menu);
 // LEGACY FUNCTIONS
 static void _clear_buffer_legacy(HANDLE hBuffer);
 static void _draw_render_unit_legacy(MENU_RENDER_ARGUMENT rargument, COORD pos, PMENU_RENDER_UNIT render_unit);
+
+// 0.9.4 BETA: REFACTORED REDRAWING FUNCTIONS
+inline static void _performFullRedraw(MENU used_menu, COORD current_size, int* y_min, int* y_max, int* x_start, int* x_max, RenderUnitDrawer _draw_render_unit_func);
+inline static void _performDirtyRedraw(MENU used_menu, int last_selected_index, int cached_selected_index, RenderUnitDrawer _draw_render_unit_func);
 
 /* ============== PUBLIC FUNCTION IMPLEMENTATIONS ============== */
 
@@ -237,13 +242,15 @@ MENU create_menu()
         }
 
     MENU new_menu = (MENU)_safe_malloc(sizeof(struct __menu));
-    memset(new_menu, FALSE, sizeof(struct __menu));
+    memset(new_menu, 0, sizeof(struct __menu));
 
     new_menu->count = 0;
     new_menu->active_buffer = 0;
     new_menu->selected_index = 0;
+    new_menu->capacity = CAPACITY_MIN;
+    new_menu->next = NULL;
 
-    new_menu->options = NULL;
+    new_menu->options = malloc(new_menu->capacity * sizeof(MENU_ITEM));
     new_menu->running = FALSE;
     new_menu->__ID = _random_uint64_t();
 
@@ -257,9 +264,11 @@ MENU create_menu()
     new_menu->menu_size = zero_point;
     new_menu->header = DEFAULT_HEADER_TEXT;
     new_menu->footer = DEFAULT_FOOTER_TEXT;
+    new_menu->header_len = _count_utf8_chars(new_menu->header);
+    new_menu->footer_len = _count_utf8_chars(new_menu->footer);
 
     new_menu->formatted_header = NULL;
-    new_menu->formatted_header = NULL;
+    new_menu->formatted_footer = NULL;
 
     _get_menu_size(new_menu);
 
@@ -329,24 +338,29 @@ COLOR_OBJECT_PROPERTY new_full_rgb_color(MENU_RGB_COLOR _color_foreground, MENU_
 /* ----- Menu Operations ----- */
 void add_option(MENU used_menu, const MENU_ITEM item)
 {
-    size_t new_size = used_menu->count + 1;
-    MENU_ITEM* new_options = (MENU_ITEM*)_safe_realloc(used_menu->options, new_size * sizeof(MENU_ITEM));
+    if (used_menu->count >= used_menu->capacity)
+        {
+            size_t new_size = used_menu->capacity + CAPACITY_STEP;
+            MENU_ITEM* new_options = (MENU_ITEM*)_safe_realloc(used_menu->options, new_size * sizeof(MENU_ITEM));
+            used_menu->options = new_options;
+            used_menu->capacity = new_size;
+        }
 
-    used_menu->options = new_options;
-    used_menu->options[used_menu->count] = item;
-    used_menu->count = new_size;
+    used_menu->options[used_menu->count++] = item;
     _get_menu_size(used_menu);
 }
 
 void change_header(MENU used_menu, const char* restrict text)
 {
     used_menu->header = text;
+    used_menu->header_len = _count_utf8_chars(used_menu->header);
     _get_menu_size(used_menu);
 }
 
 void change_footer(MENU used_menu, const char* restrict text)
 {
     used_menu->footer = text;
+    used_menu->footer_len = _count_utf8_chars(used_menu->footer);
     _get_menu_size(used_menu);
 }
 
@@ -615,7 +629,7 @@ static void _init_hError()
 }
 
 /* ----- Rendering Utilities ----- */
-static void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* text)
+inline static void _ldraw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char* text)
 {
     SetConsoleCursorPosition(hDestination, (COORD)
     {
@@ -638,12 +652,12 @@ static void _draw_at_position(HANDLE hDestination, SHORT x, SHORT y, const char*
 
 static void _vwrite_string(HANDLE hDestination, const char* text, va_list args)
 {
-    char buffer[BUFFER_CAPACITY];
+    static char buffer[BUFFER_CAPACITY];
     vsnprintf(buffer, BUFFER_CAPACITY, text, args);
     _lwrite_string(hDestination, buffer);
 }
 
-static void _lwrite_string(HANDLE hDestination, const char* text)
+inline static void _lwrite_string(HANDLE hDestination, const char* text)
 {
     WriteConsoleA(hDestination, text, (DWORD)strlen(text), &written, NULL);
 }
@@ -657,9 +671,7 @@ static size_t _count_utf8_chars(const char* s)
         {
             // in UTF-8, only the first byte of a multi-byte sequence does not start with binary '10'xxxxx
             if ((*s & 0xC0) != 0x80)
-                {
-                    count++;
-                }
+                count++;
             s++;
         }
     return count;
@@ -681,13 +693,13 @@ static unsigned long long _random_uint64_t()
     return ((unsigned long long)rand() << 32) | rand();
 }
 
-static int _check_menu(unsigned long long saved_id)
+static MENU _find_menu_by_id(unsigned long long saved_id)
 {
     for (int i = 0; i < menus_amount; i++)
         if (menus_array[i] &&
                 menus_array[i]->__ID == saved_id &&
-                menus_array[i]->running) return TRUE;
-    return FALSE;
+                menus_array[i]->running) return menus_array[i];
+    return NULL;
 }
 
 static HANDLE _find_first_active_menu_buffer()
@@ -721,12 +733,12 @@ static void _get_menu_size(MENU menu)
     // also check header and footer width to ensure menu is wide enough
     if (menu->menu_settings.header_enabled)
         {
-            size_t header_width = _count_utf8_chars(menu->header);
+            size_t header_width = menu->header_len;
             if (header_width > max_width) max_width = header_width;
         }
     if (menu->menu_settings.footer_enabled)
         {
-            size_t footer_width = _count_utf8_chars(menu->footer);
+            size_t footer_width = menu->footer_len;
             if (footer_width > max_width) max_width = footer_width;
         }
 
@@ -812,6 +824,7 @@ static int _handle_mouse_event_enabled(MENU used_menu, const MOUSE_EVENT_RECORD*
                                        int y_min, int y_max, int x, int x_max,
                                        int* last_selected_index, int* something_is_selected, int* holding)
 {
+    static int current_index_saved = DISABLED;
     int mouse_option_selected = FALSE;
     COORD mouse_pos = event->dwMousePosition;
 
@@ -820,13 +833,16 @@ static int _handle_mouse_event_enabled(MENU used_menu, const MOUSE_EVENT_RECORD*
             int selected_index = mouse_pos.Y - y_min;
             if (mouse_pos.X <= used_menu->options[selected_index]->boundaries.X)
                 {
+                    if (current_index_saved != selected_index && *last_selected_index != selected_index)
+                        used_menu->need_redraw = TRUE;
+                    if (current_index_saved != selected_index)
+                        {
+                            current_index_saved = selected_index;
+                            *last_selected_index = used_menu->selected_index;
+                            used_menu->need_redraw = TRUE;
+                        }
                     used_menu->selected_index = selected_index;
                     mouse_option_selected = *something_is_selected = TRUE;
-                    if (*last_selected_index != selected_index)
-                        {
-                            used_menu->need_redraw = TRUE;
-                            *last_selected_index = selected_index;
-                        }
                 }
         }
 
@@ -836,6 +852,7 @@ static int _handle_mouse_event_enabled(MENU used_menu, const MOUSE_EVENT_RECORD*
             used_menu->need_redraw = TRUE;
             used_menu->selected_index = DISABLED;
             *last_selected_index = DISABLED;
+            current_index_saved = DISABLED;
         }
 
     if (event->dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED && !(*holding))
@@ -901,6 +918,7 @@ static void _show_error_and_wait_extended(MENU menu)
     _draw_render_unit_legacy(rargument, zero_point, &errormsg_render_unit);
 
     _setConsoleActiveScreenBuffer(_hError);
+
     FlushConsoleInputBuffer(hStdin);
     SetConsoleScreenBufferSize(_hError, menu_size);
 
@@ -940,6 +958,7 @@ static void _show_error_and_wait_extended(MENU menu)
         }
 
     _clear_buffer_func(_hError);
+
     FlushConsoleInputBuffer(hStdin);
     _reset_mouse_state();
     _setConsoleActiveScreenBuffer(menu->hBuffer[menu->active_buffer]);
@@ -1072,26 +1091,143 @@ static void _draw_render_unit_legacy(MENU_RENDER_ARGUMENT rargument, COORD pos, 
         }
 }
 
-static void _renderMenu(const MENU used_menu)
+inline static void _performFullRedraw(MENU used_menu, COORD current_size, int* y_min, int* y_max, int* x_start, int* x_max, RenderUnitDrawer _draw_render_unit_func)
+{
+    static int full_redraw_count = 0;
+    HANDLE hBackBuffer = used_menu->hBuffer[used_menu->active_buffer ^ 1];
+    _clear_buffer_func(hBackBuffer);
+    COORD start = _calculate_start_coordinates(used_menu, current_size);
+
+    MENU_RENDER_ARGUMENT rargument = _create_render_argument(MENU_TYPE, used_menu);
+
+    // predefined render units
+    MENU_RENDER_UNIT header_render_unit = _create_render_unit("", HEADER_TYPE, NULL);
+    MENU_RENDER_UNIT option_render_unit = _create_render_unit("", SELECTABLE_TYPE, NULL);
+    MENU_RENDER_UNIT footer_render_unit = _create_render_unit("", FOOTER_TYPE, NULL);
+
+    int i, y, x;
+
+#ifdef DEBUG
+    _draw_at_position(hBackBuffer, 0, 0, "__ID: %llu", used_menu->__ID);
+    _draw_at_position(hBackBuffer, 0, 6, "WINDOW SIZE: %d %d ", current_size.X, current_size.Y);
+    _draw_at_position(hBackBuffer, 0, 14, "menus_amount: %d", menus_amount);
+    _print_memory_info(hBackBuffer);
+    _draw_at_position(hBackBuffer, 0, 32, "menus start coord: %d %d", start.X, start.Y);
+    _draw_at_position(hBackBuffer, 0, 40, "full redraw count: %d", ++full_redraw_count);
+#endif
+
+    // header
+    if (used_menu->menu_settings.header_enabled)
+        {
+            header_render_unit.text = used_menu->formatted_header;
+            _draw_render_unit_func(rargument, (COORD)
+            {
+                start.X + 2, start.Y + 1
+            }, &header_render_unit);
+        }
+
+    // options
+    MENU_ITEM* options = used_menu->options;
+    x = start.X + 2;
+    y = *y_min = start.Y + (used_menu->menu_settings.header_enabled ? 3 : 1);
+    *x_max = 0;
+    *x_start = x;
+
+    for (i = 0; i < used_menu->count; i++, y++)
+        {
+            WORD is_selected = (i == used_menu->selected_index);
+            option_render_unit.text = used_menu->options[i]->text;
+            option_render_unit.extra_data = (void*)&is_selected;
+            _draw_render_unit_func(rargument, (COORD)
+            {
+                x, y
+            }, &option_render_unit);
+
+            // boundaries calc
+            options[i]->boundaries.Y = y;
+            options[i]->boundaries.X = x + used_menu->options[i]->text_len - 1;
+            options[i]->x_position = x;
+            if (options[i]->boundaries.X > *x_max)
+                *x_max = options[i]->boundaries.X;
+        }
+    *y_max = y;
+
+    // footer
+    if (used_menu->menu_settings.footer_enabled)
+        {
+            footer_render_unit.text = used_menu->formatted_footer;
+            _draw_render_unit_func(rargument, (COORD)
+            {
+                start.X + 2, y + 1
+            }, &footer_render_unit);
+        }
+
+    _setConsoleActiveScreenBuffer(hBackBuffer);
+    used_menu->active_buffer ^= 1;
+}
+
+inline static void _performDirtyRedraw(MENU used_menu, int last_selected_index, int cached_selected_index, RenderUnitDrawer _draw_render_unit_func)
+{
+    HANDLE hCurrentBuffer = used_menu->hBuffer[used_menu->active_buffer];
+    MENU_RENDER_ARGUMENT rargument = _create_render_argument(HANDLE_TYPE, hCurrentBuffer);
+    MENU_RENDER_UNIT option_render_unit = _create_render_unit("", SELECTABLE_TYPE, NULL);
+    int selected_index = used_menu->selected_index;
+
+#ifdef DEBUG
+    static int dirty_counter = 0;
+    _draw_at_position(hCurrentBuffer, 0, 34, "selected: %d, previous: %d, cached: %d      ", selected_index, last_selected_index, cached_selected_index);
+    _draw_at_position(hCurrentBuffer, 0, 36, "dirty redraws %d", ++dirty_counter);
+#endif
+
+    // determine the actual previous index to un-highlight
+    int previous_index = (last_selected_index != DISABLED) ? last_selected_index : cached_selected_index;
+
+    // un-highlight the previous option
+    if (previous_index != DISABLED)
+        {
+            WORD is_selected = FALSE;
+            MENU_ITEM previous_option = used_menu->options[previous_index];
+            option_render_unit.text = previous_option->text;
+            option_render_unit.extra_data = (void*)&is_selected;
+            _draw_render_unit_func(rargument, (COORD)
+            {
+                previous_option->x_position, previous_option->boundaries.Y
+            }, &option_render_unit);
+        }
+
+    // highlight the new option
+    if (selected_index != DISABLED)
+        {
+            WORD is_selected = TRUE;
+            MENU_ITEM current_option = used_menu->options[selected_index];
+            option_render_unit.text = current_option->text;
+            option_render_unit.extra_data = (void*)&is_selected;
+            _draw_render_unit_func(rargument, (COORD)
+            {
+                current_option->x_position, current_option->boundaries.Y
+            }, &option_render_unit);
+        }
+}
+
+
+static void _renderMenu(MENU used_menu)
 {
     if (!used_menu) return;
 
     // BASIC VARIABLES BLOCK
-    COORD current_size, old_size, start;
-    int y_max, y_min, x_max;
-    int size_check;
-    int y, x, i, last_selected_index;
+    COORD current_size, old_size;
+    int y_max, y_min, x_max, x_start;
+    int size_check, do_full_redraw = TRUE;
+    int i, last_selected_index, cached_selected_index = DISABLED;
 
     unsigned long long saved_id; // saved menu ID to verify menu validity after callbacks
-    static int something_is_selected; // static flag persisting between function calls (indicates if any option is visually selected)
+    static int something_is_selected; // static flag persisting between function calls
 
-    // declare the function pointer
     MouseEventHandler mouse_event_handler;
 
-    HANDLE hBackBuffer;
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     SMALL_RECT new_window;
-    COORD menu_size, mouse_pos;
+    COORD menu_size;
 
     DWORD old_mode, numEvents, event, waitResult;
     WORD vk;
@@ -1117,18 +1253,10 @@ static void _renderMenu(const MENU used_menu)
 
     used_menu->selected_index = used_menu->menu_settings.mouse_enabled ? DISABLED : 0;
 
-    MENU_RENDER_ARGUMENT rargument = _create_render_argument(MENU_TYPE, used_menu);
-
-    // predefined render units
-    MENU_RENDER_UNIT header_render_unit = _create_render_unit("", HEADER_TYPE, NULL);
-    MENU_RENDER_UNIT option_render_unit = _create_render_unit("", SELECTABLE_TYPE, NULL);
-    MENU_RENDER_UNIT footer_render_unit = _create_render_unit("", FOOTER_TYPE, NULL);
-
     RenderUnitDrawer _draw_render_unit_func = (vt100_support && used_menu->menu_settings.force_legacy_mode ^ 1)
             ? _draw_render_unit
             : _draw_render_unit_legacy;
 
-    // assign the correct mouse handler ONCE before the loop starts
     if (used_menu->menu_settings.mouse_enabled)
         mouse_event_handler = _handle_mouse_event_enabled;
     else
@@ -1142,8 +1270,8 @@ static void _renderMenu(const MENU used_menu)
     };
     mouse_status = FALSE;
 #endif
-    // pre-render calls
-    _reset_mouse_state(); // resetting the mouse state because Windows is stupid
+
+    _reset_mouse_state();
     _block_input(&old_mode);
 
     while (used_menu->running)
@@ -1170,78 +1298,37 @@ static void _renderMenu(const MENU used_menu)
                     SetConsoleScreenBufferSize(used_menu->hBuffer[1], current_size);
                     SetConsoleWindowInfo(used_menu->hBuffer[0], TRUE, &new_window);
                     SetConsoleWindowInfo(used_menu->hBuffer[1], TRUE, &new_window);
+
                     FlushConsoleInputBuffer(hStdin);
-                    used_menu->need_redraw = 1;
+                    used_menu->need_redraw = TRUE;
+                    do_full_redraw = TRUE;
                 }
+
             if (used_menu->need_redraw)
                 {
-                    hBackBuffer = used_menu->hBuffer[used_menu->active_buffer ^ 1];
-                    _clear_buffer_func(hBackBuffer);
-                    start = _calculate_start_coordinates(used_menu, current_size);
+                    int selected_index = used_menu->selected_index;
+                    // cache the last known valid index. This is crucial for dirty redraws
+                    // when the mouse moves off all options (selected_index becomes DISABLED).
+                    if (selected_index != DISABLED) cached_selected_index = selected_index;
 
-#ifdef DEBUG
-                    _draw_at_position(hBackBuffer, 0, 0, "__ID: %llu", used_menu->__ID);
-                    _draw_at_position(hBackBuffer, 0, 2, "SELECTED: %d", something_is_selected);
-                    _draw_at_position(hBackBuffer, 0, 6, "WINDOW SIZE: %d %d ", current_size.X, current_size.Y);
-                    _draw_at_position(hBackBuffer, 0, 10, "MOUSE POS: %d %d    ", debug_mouse_pos.X, debug_mouse_pos.Y);
-                    _draw_at_position(hBackBuffer, 0, 14, "menus_amount: %d", menus_amount);
-                    _print_memory_info(hBackBuffer); // -> 30
-                    _draw_at_position(hBackBuffer, 0, 32, "menus start coord: %d %d", start.X, start.Y);
-#endif
-
-                    // header
-                    if (used_menu->menu_settings.header_enabled)
+                    // if the size changed, a full redraw is mandatory.
+                    if (do_full_redraw)
                         {
-                            header_render_unit.text = used_menu->formatted_header;
-                            _draw_render_unit_func(rargument,
-                                                   (COORD)
-                            {
-                                start.X + 2, start.Y + 1
-                            }, &header_render_unit);
+                            _performFullRedraw(used_menu, current_size, &y_min, &y_max, &x_start, &x_max, _draw_render_unit_func);
+                            do_full_redraw = FALSE; // reset
+                        }
+                    // otherwise, perform a much faster "dirty" redraw.
+                    else
+                        {
+                            _performDirtyRedraw(used_menu, last_selected_index, cached_selected_index, _draw_render_unit_func);
                         }
 
-                    // options
-                    x = start.X + 2;
-                    y = y_min = start.Y + (used_menu->menu_settings.header_enabled ? 3 : 1);
-                    x_max = 0;
-
-                    for (i = 0; i < used_menu->count; i++, y++)
-                        {
-                            // option printing setup
-                            WORD is_selected = (i == used_menu->selected_index);
-                            option_render_unit.text = used_menu->options[i]->text;
-                            option_render_unit.extra_data = (void*)&is_selected;
-                            _draw_render_unit_func(rargument,
-                                                   (COORD)
-                            {
-                                x, y
-                            }, &option_render_unit);
-
-                            // boundaries calc
-                            used_menu->options[i]->boundaries.Y = y;
-                            used_menu->options[i]->boundaries.X = x + used_menu->options[i]->text_len - 1;
-                            if (used_menu->options[i]->boundaries.X > x_max)
-                                x_max = used_menu->options[i]->boundaries.X;
-                        }
-                    y_max = y;
-
-                    // footer
-                    if (used_menu->menu_settings.footer_enabled)
-                        {
-                            footer_render_unit.text = used_menu->formatted_footer;
-                            _draw_render_unit_func(rargument,
-                                                   (COORD)
-                            {
-                                start.X + 2, y + 1
-                            }, &footer_render_unit);
-                        }
-
-                    _setConsoleActiveScreenBuffer(hBackBuffer);
-                    used_menu->active_buffer ^= 1;
-                    used_menu->need_redraw = FALSE;
+                    used_menu->need_redraw = FALSE; // reset redraw flag
                 }
 
             // events handling
+        event_wait:
+            ;
             waitResult = WaitForSingleObject(hStdin, UPDATE_FREQUENCE);
             if (waitResult == WAIT_OBJECT_0)
                 {
@@ -1261,14 +1348,14 @@ static void _renderMenu(const MENU used_menu)
                                                             switch (vk)
                                                                 {
                                                                     case VK_UP:
+                                                                        last_selected_index = used_menu->selected_index;
                                                                         used_menu->selected_index =
                                                                             (used_menu->selected_index - 1 + used_menu->count) % used_menu->count;
-                                                                        last_selected_index = used_menu->selected_index;
                                                                         break;
                                                                     case VK_DOWN:
+                                                                        last_selected_index = used_menu->selected_index;
                                                                         used_menu->selected_index =
                                                                             (used_menu->selected_index + 1) % used_menu->count;
-                                                                        last_selected_index = used_menu->selected_index;
                                                                         break;
                                                                     case VK_RETURN: // ENTER
                                                                         if (used_menu->selected_index >= 0 && used_menu->options[used_menu->selected_index]->callback && used_menu->options[used_menu->selected_index]->callback != NULL)
@@ -1288,16 +1375,19 @@ static void _renderMenu(const MENU used_menu)
 
                                                                                 MENU_ITEM current_option = used_menu->options[used_menu->selected_index];
                                                                                 current_option->callback(used_menu, current_option->data_chunk);
+                                                                                FlushConsoleInputBuffer(hStdin);
 
-                                                                                if (_check_menu(saved_id)) // if exists after the callback (may be deleted)
+                                                                                used_menu = _find_menu_by_id(saved_id); // redefining
+
+                                                                                if (used_menu) // if exists after the callback (may be deleted)
                                                                                     {
                                                                                         if (_size_check(used_menu)) _show_error_and_wait_extended(used_menu);
 
                                                                                         current_size = cached_size;
                                                                                         _block_input(&old_mode);
-                                                                                        _reset_mouse_state(); // resetting the mouse state because Windows is stupid (or me)
+                                                                                        _reset_mouse_state();
 
-                                                                                        _setConsoleActiveScreenBuffer(hBackBuffer);
+                                                                                        _setConsoleActiveScreenBuffer(used_menu->hBuffer[used_menu->active_buffer]);
                                                                                     }
                                                                                 else goto end_render_loop;
                                                                             }
@@ -1311,8 +1401,7 @@ static void _renderMenu(const MENU used_menu)
                                                                         break;
 #endif
                                                                 }
-                                                            FlushConsoleInputBuffer(hStdin);
-                                                            goto next_event_iteration; // break from key handling to avoid processing other events in this batch
+                                                            goto next_event_iteration; // break from key handling
                                                         }
                                                 }
                                             break;
@@ -1322,9 +1411,8 @@ static void _renderMenu(const MENU used_menu)
                                             mouse_status = inputRecords[event].Event.MouseEvent.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED;
                                             _draw_at_position(hCurrent, 0, 10, "MOUSE POS: %d %d    ", debug_mouse_pos.X, debug_mouse_pos.Y);
 #endif
-                                            // a single, unconditional function call
                                             if (mouse_event_handler(used_menu, &inputRecords[event].Event.MouseEvent,
-                                                                    y_min, y_max, x, x_max,
+                                                                    y_min, y_max, x_start, x_max,
                                                                     &last_selected_index, &something_is_selected, &holding))
                                                 {
                                                     goto input_handler;
@@ -1337,10 +1425,12 @@ static void _renderMenu(const MENU used_menu)
                         next_event_iteration:
                             ;
                         }
-                    FlushConsoleInputBuffer(hStdin);
+                    // FlushConsoleInputBuffer(hStdin);
                 }
         }
+
 end_render_loop:; // anchor
+
     FlushConsoleInputBuffer(hStdin);
     SetConsoleMode(hStdin, old_mode);
     if (menus_amount == 0)
@@ -1348,7 +1438,6 @@ end_render_loop:; // anchor
     else _setConsoleActiveScreenBuffer(_find_first_active_menu_buffer());
 }
 
-// TODO: check
 static void _update_formatted_strings(MENU menu)
 {
     free(menu->formatted_header);
@@ -1370,24 +1459,25 @@ static void _update_formatted_strings(MENU menu)
     size_t header_pad_left = (inner_width > header_text_len) ? (inner_width - header_text_len) / 2 : 0;
     size_t header_pad_right = (inner_width > header_text_len) ? (inner_width - header_text_len - header_pad_left) : 0;
 
-    if (use_vt100)
-        snprintf(menu->formatted_header, buffer_size, "%s%*s%s%*s" RESET_ALL_STYLES,
-                 menu->color_object.headerColor.__rgb_seq,
-                 (int)header_pad_left, "", menu->header, (int)header_pad_right, "");
-    else
-        snprintf(menu->formatted_header, buffer_size, "%*s%s%*s",
-                 (int)header_pad_left, "", menu->header, (int)header_pad_right, "");
-
     // format Footer
     size_t footer_text_len = _count_utf8_chars(menu->footer);
     size_t footer_pad_left = (inner_width > footer_text_len) ? (inner_width - footer_text_len) / 2 : 0;
     size_t footer_pad_right = (inner_width > footer_text_len) ? (inner_width - footer_text_len - footer_pad_left) : 0;
 
     if (use_vt100)
-        snprintf(menu->formatted_footer, buffer_size, "%s%*s%s%*s" RESET_ALL_STYLES,
-                 menu->color_object.footerColor.__rgb_seq,
-                 (int)footer_pad_left, "", menu->footer, (int)footer_pad_right, "");
+        {
+            snprintf(menu->formatted_header, buffer_size, VT100_MENU_STRING_FORMAT,
+                     menu->color_object.headerColor.__rgb_seq,
+                     (int)header_pad_left, "", menu->header, (int)header_pad_right, "");
+            snprintf(menu->formatted_footer, buffer_size, VT100_MENU_STRING_FORMAT,
+                     menu->color_object.footerColor.__rgb_seq,
+                     (int)footer_pad_left, "", menu->footer, (int)footer_pad_right, "");
+        }
     else
-        snprintf(menu->formatted_footer, buffer_size, "%*s%s%*s",
-                 (int)footer_pad_left, "", menu->footer, (int)footer_pad_right, "");
+        {
+            snprintf(menu->formatted_header, buffer_size, LEGACY_MENU_STRING_FORMAT,
+                     (int)header_pad_left, "", menu->header, (int)header_pad_right, "");
+            snprintf(menu->formatted_footer, buffer_size, LEGACY_MENU_STRING_FORMAT,
+                     (int)footer_pad_left, "", menu->footer, (int)footer_pad_right, "");
+        }
 }
