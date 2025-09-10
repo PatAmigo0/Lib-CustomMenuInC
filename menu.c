@@ -65,6 +65,8 @@ typedef struct __menu_custom_render_argument
     union RenderArgumentValue value;
 } MENU_RENDER_ARGUMENT;
 
+typedef unsigned long long size_t;
+
 /* ============== WRAPPER TYPES ============== */
 typedef void (*ClearBufferFunc)(HANDLE);
 typedef void (*RenderUnitDrawer)(MENU_RENDER_ARGUMENT, COORD, PMENU_RENDER_UNIT);
@@ -91,7 +93,8 @@ static LEGACY_MENU_COLOR MENU_LEGACY_DEFAULT_COLOR;
 
 // menu values
 static MENU* menus_array = NULL;
-static int menus_amount = 0;
+static size_t menus_amount = 0;
+static size_t menus_capacity = 0;
 
 // other values
 static WORD reset_color_attribute =
@@ -247,6 +250,7 @@ MENU create_menu()
     new_menu->count = 0;
     new_menu->active_buffer = 0;
     new_menu->selected_index = 0;
+    new_menu->full_redraw = TRUE;
     new_menu->capacity = CAPACITY_MIN;
     new_menu->next = NULL;
 
@@ -272,7 +276,14 @@ MENU create_menu()
 
     _get_menu_size(new_menu);
 
-    menus_array = (MENU*)_safe_realloc(menus_array, (menus_amount + 1) * sizeof(MENU));
+    // checking if we can fit in our new menu
+    if (menus_amount + 1 > menus_capacity)
+        {
+            // if cant, do realloc
+            menus_capacity += CAPACITY_STEP;
+            menus_array = (MENU*)_safe_realloc(menus_array, menus_capacity * sizeof(MENU));
+        }
+
     menus_array[menus_amount++] = new_menu;
 
     return new_menu;
@@ -348,6 +359,7 @@ void add_option(MENU used_menu, const MENU_ITEM item)
 
     used_menu->options[used_menu->count++] = item;
     _get_menu_size(used_menu);
+    used_menu->full_redraw = TRUE;
 }
 
 void change_header(MENU used_menu, const char* restrict text)
@@ -399,6 +411,8 @@ void clear_option(MENU used_menu, MENU_ITEM option_to_clear)
 
                 if (used_menu->count <= 0) clear_menu(used_menu);
                 else used_menu->options = (MENU_ITEM*)_safe_realloc((void*)used_menu->options, used_menu->count * sizeof(MENU_ITEM));
+
+                used_menu->full_redraw = TRUE;
                 break;
             }
 }
@@ -873,6 +887,7 @@ static void _block_input(DWORD* oldMode)
 {
     GetConsoleMode(hStdin, oldMode);
     DWORD newMode = *oldMode;
+    newMode |= ENABLE_EXTENDED_FLAGS;
     newMode &= ~(ENABLE_QUICK_EDIT_MODE | ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT);
     newMode |= (ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT);
     if (vt100_support) newMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
@@ -1025,7 +1040,7 @@ static void _draw_render_unit(MENU_RENDER_ARGUMENT rargument, COORD pos, PMENU_R
         }
 
     DWORD unit_type = render_unit->unit_type;
-    const char* color_seq = "";
+    const char* color_seq;
 
     switch (unit_type)
         {
@@ -1034,7 +1049,7 @@ static void _draw_render_unit(MENU_RENDER_ARGUMENT rargument, COORD pos, PMENU_R
                 _ldraw_at_position(backBuffer, pos.X, pos.Y, render_unit->text);
                 break;
             case (SELECTABLE_TYPE): // SELECTABLE (option)
-                if (*((WORD*)render_unit->extra_data))   // is selected
+                if (*((WORD*)render_unit->extra_data)) // is selected
                     {
                         color_seq = menu_color.optionColor.__rgb_seq;
                         _draw_at_position(backBuffer, pos.X, pos.Y, "%s%s"RESET_ALL_STYLES, color_seq, render_unit->text);
@@ -1209,6 +1224,24 @@ inline static void _performDirtyRedraw(MENU used_menu, int last_selected_index, 
         }
 }
 
+static void _ensure_safe_startup()
+{
+    size_t cycle = 0;
+    size_t eventsAmount = 0;
+    _reset_mouse_state();
+    while (1)
+        {
+            if (GetNumberOfConsoleInputEvents(hStdin, &eventsAmount))
+                {
+                	// brute forcing to fix input buffer
+                    if (eventsAmount < 10 && cycle > 10) break;
+                    _reset_mouse_state();
+                    FlushConsoleInputBuffer(hStdin);
+                }
+            if (cycle > 100) exit(1);
+            ++cycle;
+        }
+}
 
 static void _renderMenu(MENU used_menu)
 {
@@ -1217,7 +1250,7 @@ static void _renderMenu(MENU used_menu)
     // BASIC VARIABLES BLOCK
     COORD current_size, old_size;
     int y_max, y_min, x_max, x_start;
-    int size_check, do_full_redraw = TRUE;
+    int size_check;
     int i, last_selected_index, cached_selected_index = DISABLED;
 
     unsigned long long saved_id; // saved menu ID to verify menu validity after callbacks
@@ -1263,7 +1296,7 @@ static void _renderMenu(MENU used_menu)
         mouse_event_handler = _handle_mouse_event_disabled;
 
 #ifdef DEBUG
-    tick_count = 0;
+    tick_count = 1;
     debug_mouse_pos = (COORD)
     {
         0, 0
@@ -1273,6 +1306,8 @@ static void _renderMenu(MENU used_menu)
 
     _reset_mouse_state();
     _block_input(&old_mode);
+    FlushConsoleInputBuffer(hStdin);
+    if (menus_array[0]->__ID == used_menu->__ID) _ensure_safe_startup(); // running only for the first menu
 
     while (used_menu->running)
         {
@@ -1301,7 +1336,7 @@ static void _renderMenu(MENU used_menu)
 
                     FlushConsoleInputBuffer(hStdin);
                     used_menu->need_redraw = TRUE;
-                    do_full_redraw = TRUE;
+                    used_menu->full_redraw = TRUE;
                 }
 
             if (used_menu->need_redraw)
@@ -1311,13 +1346,13 @@ static void _renderMenu(MENU used_menu)
                     // when the mouse moves off all options (selected_index becomes DISABLED).
                     if (selected_index != DISABLED) cached_selected_index = selected_index;
 
-                    // if the size changed, a full redraw is mandatory.
-                    if (do_full_redraw)
+                    // if the size changed, a full redraw is mandatory
+                    if (used_menu->full_redraw)
                         {
                             _performFullRedraw(used_menu, current_size, &y_min, &y_max, &x_start, &x_max, _draw_render_unit_func);
-                            do_full_redraw = FALSE; // reset
+                            used_menu->full_redraw = FALSE; // reset
                         }
-                    // otherwise, perform a much faster "dirty" redraw.
+                    // otherwise, perform a much faster "dirty" redraw
                     else
                         {
                             _performDirtyRedraw(used_menu, last_selected_index, cached_selected_index, _draw_render_unit_func);
@@ -1349,8 +1384,11 @@ static void _renderMenu(MENU used_menu)
                                                                 {
                                                                     case VK_UP:
                                                                         last_selected_index = used_menu->selected_index;
-                                                                        used_menu->selected_index =
-                                                                            (used_menu->selected_index - 1 + used_menu->count) % used_menu->count;
+                                                                        if (used_menu->selected_index == DISABLED)
+                                                                            used_menu->selected_index = used_menu->count - 1 % used_menu->count;
+                                                                        else
+                                                                            used_menu->selected_index =
+                                                                                (used_menu->selected_index - 1 + used_menu->count) % used_menu->count;
                                                                         break;
                                                                     case VK_DOWN:
                                                                         last_selected_index = used_menu->selected_index;
@@ -1366,8 +1404,8 @@ static void _renderMenu(MENU used_menu)
                                                                                 SetConsoleScreenBufferSize(hConsole, current_size);
                                                                                 _initWindow(&new_window, current_size);
                                                                                 SetConsoleWindowInfo(hConsole, TRUE, &new_window);
+                                                                                
                                                                                 fflush(stdin);
-
                                                                                 FlushConsoleInputBuffer(hStdin);
 
                                                                                 _clear_buffer_func(hConsole);
@@ -1425,7 +1463,7 @@ static void _renderMenu(MENU used_menu)
                         next_event_iteration:
                             ;
                         }
-                    // FlushConsoleInputBuffer(hStdin);
+                    FlushConsoleInputBuffer(hStdin); // ensures that when we are swapping our menus there's not going to be events spam (idk how it works but it works)
                 }
         }
 
