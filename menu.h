@@ -256,6 +256,7 @@ typedef struct __menu
     // boolean
     int running;
     int need_redraw;
+    int full_redraw;
 
     // handles
     HANDLE hBuffer[2];
