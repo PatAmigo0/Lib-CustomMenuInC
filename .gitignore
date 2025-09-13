@@ -2,7 +2,8 @@
 *.lib
 *.ibj
 *.exp
-*.dll
 *.obj
 *.vscode
+*.c
+*.h
 *.gitignore
