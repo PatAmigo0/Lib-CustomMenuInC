@@ -28,6 +28,10 @@
 #include <time.h>
 #endif
 
+#ifndef _STDDEF_H_
+#include <stddef.h>
+#endif
+
 /* end */
 
 /* ============== CONSTANTS & MACROS ============== */
@@ -304,7 +308,7 @@ void change_header(MENU used_menu, const char* text);
 void change_footer(MENU used_menu, const char* text);
 
 /* ----- Item Management ----- */
-void add_option(MENU used_menu, const MENU_ITEM item);
+int add_option(MENU used_menu, const MENU_ITEM item); // return code 1 = error, 0 = success
 void clear_option(MENU used_menu, MENU_ITEM option_to_clear);
 
 /* ----- Color Functions ----- */
@@ -327,4 +331,3 @@ double tick();
 static MENU_RENDER_UNIT_TYPES mrut;
 
 #endif
-
