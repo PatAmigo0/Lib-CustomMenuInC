@@ -3,6 +3,18 @@
 #ifndef _MENU_H_
 #define _MENU_H_
 
+/* ============== DLL SETUP ============== */
+// uncomment or add a compiler flag if c/cpp lib is needed
+// #define MENULIB_IS_STATIC
+
+#if defined(MENULIB_STATIC)
+  #define MENULIB_API // if static, no dll
+#elif defined(MENULIB_EXPORTS)
+  #define MENULIB_API __declspec(dllexport) // if building the DLL, export
+#else
+  #define MENULIB_API __declspec(dllimport) // else import
+#endif
+
 /* ============== INCLUDES ============== */
 #ifndef _STDIO_H_
 #include <stdio.h>
@@ -186,7 +198,7 @@ typedef struct __menu_item
     COORD boundaries;
     int x_position;
     int text_len; // Visual length in characters, not bytes
-    const char* text;
+    char* text;
     void (*callback)(struct __menu*, void*);
     void* data_chunk;
 } *MENU_ITEM;
@@ -271,8 +283,8 @@ typedef struct __menu
     COORD current_size;
     COORD halt_size;
 
-    const char* footer;
-    const char* header;
+    char* footer;
+    char* header;
     size_t footer_len;
     size_t header_len;
 
@@ -292,40 +304,41 @@ typedef void (*__menu_callback)(MENU, dpointer);
 /* ============== FUNCTION DECLARATIONS ============== */
 
 /* ----- Core Functions ----- */
-MENU create_menu();
-MENU_ITEM create_menu_item(const char* text, __menu_callback callback, void* callback_data);
-void enable_menu(MENU used_menu);
-void clear_menu(MENU menu_to_clear);
-void clear_menus();
-void clear_menus_and_exit();
+
+MENULIB_API MENU create_menu();
+MENULIB_API MENU_ITEM create_menu_item(const char* text, __menu_callback callback, void* callback_data);
+MENULIB_API void enable_menu(MENU used_menu);
+MENULIB_API void clear_menu(MENU menu_to_clear);
+MENULIB_API void clear_menus();
+MENULIB_API void clear_menus_and_exit();
 
 /* ----- Configuration Functions ----- */
-void set_menu_settings(MENU menu, MENU_SETTINGS new_settings);
-void set_color_object(MENU menu, MENU_COLOR color_object);
-void change_menu_policy(MENU menu_to_change, int new_header_policy, int new_footer_policy);
-void toggle_mouse(MENU menu_to_change);
-void change_header(MENU used_menu, const char* text);
-void change_footer(MENU used_menu, const char* text);
+MENULIB_API void set_menu_settings(MENU menu, MENU_SETTINGS new_settings);
+MENULIB_API void set_color_object(MENU menu, MENU_COLOR color_object);
+MENULIB_API void change_menu_policy(MENU menu_to_change, int new_header_policy, int new_footer_policy);
+MENULIB_API void toggle_mouse(MENU menu_to_change);
+MENULIB_API void change_header(MENU used_menu, const char* text);
+MENULIB_API void change_footer(MENU used_menu, const char* text);
 
 /* ----- Item Management ----- */
-int add_option(MENU used_menu, const MENU_ITEM item); // return code 1 = error, 0 = success
-void clear_option(MENU used_menu, MENU_ITEM option_to_clear);
+MENULIB_API int add_option(MENU used_menu, const MENU_ITEM item);
+MENULIB_API void clear_option(MENU used_menu, MENU_ITEM option_to_clear);
 
 /* ----- Color Functions ----- */
-MENU_RGB_COLOR mrgb(short r, short g, short b);
-COLOR_OBJECT_PROPERTY new_rgb_color(int text_color, MENU_RGB_COLOR color);
-COLOR_OBJECT_PROPERTY new_full_rgb_color(MENU_RGB_COLOR fg, MENU_RGB_COLOR bg);
+MENULIB_API MENU_RGB_COLOR mrgb(short r, short g, short b);
+MENULIB_API COLOR_OBJECT_PROPERTY new_rgb_color(int text_color, MENU_RGB_COLOR color);
+MENULIB_API COLOR_OBJECT_PROPERTY new_full_rgb_color(MENU_RGB_COLOR fg, MENU_RGB_COLOR bg);
 
 /* ----- Settings Management ----- */
-MENU_SETTINGS create_new_settings();
-MENU_COLOR create_color_object();
-LEGACY_MENU_COLOR create_legacy_color_object();
-void set_default_menu_settings(MENU_SETTINGS new_settings);
-void set_default_color_object(MENU_COLOR color_object);
-void set_default_legacy_color_object(LEGACY_MENU_COLOR color_object);
+MENULIB_API MENU_SETTINGS create_new_settings();
+MENULIB_API MENU_COLOR create_color_object();
+MENULIB_API LEGACY_MENU_COLOR create_legacy_color_object();
+MENULIB_API void set_default_menu_settings(MENU_SETTINGS new_settings);
+MENULIB_API void set_default_color_object(MENU_COLOR color_object);
+MENULIB_API void set_default_legacy_color_object(LEGACY_MENU_COLOR color_object);
 
 /* ----- Utility Functions ----- */
-double tick();
+MENULIB_API double tick();
 
 // Global struct that defines types for render units
 static MENU_RENDER_UNIT_TYPES mrut;

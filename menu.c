@@ -145,14 +145,14 @@ static MENU_SETTINGS _create_default_settings();
 static MENU_COLOR _create_default_color();
 static MENU_RENDER_UNIT _create_render_unit(const char* text, DWORD unit_type, void* extra_data);
 static MENU_RENDER_ARGUMENT _create_render_argument(enum RenderArgumentTag data_tag, void* value);
-inline static size_t _random_uint64_t();
+inline static unsigned long long _random_uint64_t();
 static void _init_menu_system();
 inline static void _init_hError();
 inline static HANDLE _createConsoleScreenBuffer();
 
-static void _draw_at_position_vt(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text, ...);
+static void _draw_at_position_vt(HANDLE hDestination, SHORT x, SHORT y, const char* text, ...);
 static void _draw_at_position_legacy(HANDLE hDestination, SHORT x, SHORT y, const char* text, ...);
-static void _ldraw_at_position_vt(HANDLE hDestination, SHORT x, SHORT y, const char* restrict text);
+static void _ldraw_at_position_vt(HANDLE hDestination, SHORT x, SHORT y, const char* text);
 static void _ldraw_at_position_legacy(HANDLE hDestination, SHORT x, SHORT y, const char* text);
 static void _vwrite_string(HANDLE hDestination, const char* restrict text, va_list args);
 inline static void _lwrite_string(HANDLE hDestination, const char* restrict text);
@@ -190,7 +190,7 @@ inline static void _performDirtyRedraw(MENU used_menu, int last_selected_index, 
 /* ============== PUBLIC FUNCTION IMPLEMENTATIONS ============== */
 
 /* ----- timing Functions ----- */
-double tick()
+MENULIB_API double tick()
 {
     static LARGE_INTEGER freq = {0};
     if (freq.QuadPart == 0)
@@ -201,54 +201,54 @@ double tick()
 }
 
 /* ----- Menu Policy Functions ----- */
-void change_menu_policy(MENU menu_to_change, int new_header_policy, int new_footer_policy)
+MENULIB_API void change_menu_policy(MENU menu_to_change, int new_header_policy, int new_footer_policy)
 {
     menu_to_change->menu_settings.header_enabled = !!new_header_policy;
     menu_to_change->menu_settings.footer_enabled = !!new_footer_policy;
 }
 
-void toggle_mouse(MENU menu_to_change)
+MENULIB_API void toggle_mouse(MENU menu_to_change)
 {
     menu_to_change->menu_settings.mouse_enabled = menu_to_change->menu_settings.mouse_enabled ^ 1;
 }
 
 /* ----- Configuration Functions (Setters) ----- */
-void set_menu_settings(MENU menu, MENU_SETTINGS new_settings)
+MENULIB_API void set_menu_settings(MENU menu, MENU_SETTINGS new_settings)
 {
     memcpy((void*)&(menu->menu_settings), (void*)&new_settings, sizeof(MENU_SETTINGS));
     _clamp_center_coord(&(menu->menu_settings.menu_center));
 }
 
-void set_default_menu_settings(MENU_SETTINGS new_settings)
+MENULIB_API void set_default_menu_settings(MENU_SETTINGS new_settings)
 {
     if (menu_settings_initialized ^ TRUE) menu_settings_initialized = TRUE;
     memcpy((void*)&MENU_DEFAULT_SETTINGS, (void*)&new_settings, sizeof(MENU_SETTINGS));
 }
 
-void set_color_object(MENU menu, MENU_COLOR color_object)
+MENULIB_API void set_color_object(MENU menu, MENU_COLOR color_object)
 {
     memcpy((void*)&(menu->color_object), (void*)&color_object, sizeof(MENU_COLOR));
 }
 
-void set_legacy_color_object(MENU menu, LEGACY_MENU_COLOR legacy_color_object)
+MENULIB_API void set_legacy_color_object(MENU menu, LEGACY_MENU_COLOR legacy_color_object)
 {
     memcpy((void*)&(menu->legacy_color_object), (void*)&legacy_color_object, sizeof(LEGACY_MENU_COLOR));
 }
 
-void set_default_color_object(MENU_COLOR color_object)
+MENULIB_API void set_default_color_object(MENU_COLOR color_object)
 {
     if (menu_color_initialized ^ TRUE) menu_color_initialized = TRUE;
     memcpy((void*)&MENU_DEFAULT_COLOR, (void*)&color_object, sizeof(MENU_COLOR));
 }
 
-void set_default_legacy_color_object(LEGACY_MENU_COLOR color_object)
+MENULIB_API void set_default_legacy_color_object(LEGACY_MENU_COLOR color_object)
 {
     if (menu_legacy_color_initialized ^ TRUE) menu_legacy_color_initialized = TRUE;
     memcpy((void*)&MENU_LEGACY_DEFAULT_COLOR, (void*)&color_object, sizeof(LEGACY_MENU_COLOR));
 }
 
 /* ----- Creation Functions ----- */
-MENU create_menu()
+MENULIB_API MENU create_menu()
 {
     static int _initialized = FALSE;
     if (!_initialized)
@@ -288,8 +288,8 @@ MENU create_menu()
     _toggle_cursor(new_menu->hBuffer[1], FALSE);
 
     new_menu->menu_size = zero_point;
-    new_menu->header = DEFAULT_HEADER_TEXT;
-    new_menu->footer = DEFAULT_FOOTER_TEXT;
+    new_menu->header = strdup(DEFAULT_HEADER_TEXT);
+    new_menu->footer = strdup(DEFAULT_FOOTER_TEXT);
     new_menu->header_len = _count_utf8_chars(new_menu->header);
     new_menu->footer_len = _count_utf8_chars(new_menu->footer);
 
@@ -324,12 +324,12 @@ MENU create_menu()
     return new_menu;
 }
 
-MENU_ITEM create_menu_item(const char* restrict text, __menu_callback callback, void* callback_data)
+MENULIB_API MENU_ITEM create_menu_item(const char* restrict text, __menu_callback callback, void* callback_data)
 {
     MENU_ITEM item = (MENU_ITEM)_safe_malloc(sizeof(struct __menu_item));
     if (!item) return NULL;
 
-    item->text = text ? text : DEFAULT_MENU_TEXT;
+    item->text = text ? strdup(text) : DEFAULT_MENU_TEXT;
     item->text_len = _count_utf8_chars(item->text);
     item->boundaries = (COORD)
     {
@@ -340,26 +340,26 @@ MENU_ITEM create_menu_item(const char* restrict text, __menu_callback callback, 
     return item;
 }
 
-MENU_SETTINGS create_new_settings()
+MENULIB_API MENU_SETTINGS create_new_settings()
 {
     if (menu_settings_initialized ^ 1) _init_menu_system();
     return MENU_DEFAULT_SETTINGS;
 }
 
-MENU_COLOR create_color_object()
+MENULIB_API MENU_COLOR create_color_object()
 {
     if (menu_color_initialized ^ 1) _init_menu_system();
     return MENU_DEFAULT_COLOR;
 }
 
-LEGACY_MENU_COLOR create_legacy_color_object()
+MENULIB_API LEGACY_MENU_COLOR create_legacy_color_object()
 {
     if (menu_legacy_color_initialized ^ 1) _init_menu_system();
     return MENU_LEGACY_DEFAULT_COLOR;
 }
 
 /* ----- Color Functions ----- */
-MENU_RGB_COLOR mrgb(short r, short g, short b)
+MENULIB_API MENU_RGB_COLOR mrgb(short r, short g, short b)
 {
     return (MENU_RGB_COLOR)
     {
@@ -367,14 +367,14 @@ MENU_RGB_COLOR mrgb(short r, short g, short b)
     };
 }
 
-COLOR_OBJECT_PROPERTY new_rgb_color(int text_color, MENU_RGB_COLOR color)
+MENULIB_API COLOR_OBJECT_PROPERTY new_rgb_color(int text_color, MENU_RGB_COLOR color)
 {
     COLOR_OBJECT_PROPERTY object;
     sprintf(object.__rgb_seq, RGB_COLOR_SEQUENCE, text_color ? 38 : 48, color.r, color.g, color.b);
     return object;
 }
 
-COLOR_OBJECT_PROPERTY new_full_rgb_color(MENU_RGB_COLOR _color_foreground, MENU_RGB_COLOR _color_background)
+MENULIB_API COLOR_OBJECT_PROPERTY new_full_rgb_color(MENU_RGB_COLOR _color_foreground, MENU_RGB_COLOR _color_background)
 {
     COLOR_OBJECT_PROPERTY object;
     sprintf(object.__rgb_seq, RGB_COLOR_DOUBLE_SEQUENCE,
@@ -384,7 +384,7 @@ COLOR_OBJECT_PROPERTY new_full_rgb_color(MENU_RGB_COLOR _color_foreground, MENU_
 }
 
 /* ----- Menu Operations ----- */
-int add_option(MENU used_menu, const MENU_ITEM item)
+MENULIB_API int add_option(MENU used_menu, const MENU_ITEM item)
 {
     if (!item) return 1;
 
@@ -408,21 +408,21 @@ int add_option(MENU used_menu, const MENU_ITEM item)
     return 0;
 }
 
-void change_header(MENU used_menu, const char* restrict text)
+MENULIB_API void change_header(MENU used_menu, const char* restrict text)
 {
-    used_menu->header = text;
+    used_menu->header = strdup(text);
     used_menu->header_len = _count_utf8_chars(used_menu->header);
     _get_menu_size(used_menu);
 }
 
-void change_footer(MENU used_menu, const char* restrict text)
+MENULIB_API void change_footer(MENU used_menu, const char* restrict text)
 {
-    used_menu->footer = text;
+    used_menu->footer = strdup(text);
     used_menu->footer_len = _count_utf8_chars(used_menu->footer);
     _get_menu_size(used_menu);
 }
 
-void enable_menu(MENU used_menu)
+MENULIB_API void enable_menu(MENU used_menu)
 {
     if (!used_menu || used_menu->count == 0)
         {
@@ -440,12 +440,13 @@ void enable_menu(MENU used_menu)
 }
 
 /* ----- Cleanup Functions ----- */
-void clear_option(MENU used_menu, MENU_ITEM option_to_clear)
+MENULIB_API void clear_option(MENU used_menu, MENU_ITEM option_to_clear)
 {
     MENU_ITEM* o = used_menu->options;
     for (int i = 0; i < used_menu->count; i++)
         if (o[i] == option_to_clear)
             {
+                free(o[i]->text);
                 free(o[i]);
                 used_menu->count--;
 
@@ -472,7 +473,7 @@ void clear_option(MENU used_menu, MENU_ITEM option_to_clear)
             }
 }
 
-void clear_menu(MENU menu_to_clear)
+MENULIB_API void clear_menu(MENU menu_to_clear)
 {
     for (int i = 0; i < menus_amount; i++)
         if (menus_array[i] == menu_to_clear)
@@ -481,7 +482,11 @@ void clear_menu(MENU menu_to_clear)
                 if (m->options != NULL && m->count > 0)
                     {
                         for (int j = 0; j < m->count; j++)
-                            free(m->options[j]);
+                            {
+                                free(m->options[j]->text);
+                                free(m->options[j]);
+                            }
+
                         free(m->options);
                         m->options = NULL;
                     }
@@ -489,6 +494,8 @@ void clear_menu(MENU menu_to_clear)
                 // free(m->color_object);
                 free(m->formatted_header);
                 free(m->formatted_footer);
+                free(m->header);
+                free(m->footer);
 
                 if (m->hBuffer[0] != INVALID_HANDLE_VALUE) CloseHandle(m->hBuffer[0]);
                 if (m->hBuffer[1] != INVALID_HANDLE_VALUE) CloseHandle(m->hBuffer[1]);
@@ -520,13 +527,13 @@ void clear_menu(MENU menu_to_clear)
             }
 }
 
-void clear_menus()
+MENULIB_API void clear_menus()
 {
     while(menus_amount > 0)
         clear_menu(menus_array[0]);
 }
 
-void clear_menus_and_exit()
+MENULIB_API void clear_menus_and_exit()
 {
     clear_menus();
     exit(0);
@@ -800,9 +807,9 @@ inline static void _clamp_center_coord(MENU_COORD* coord)
     else if (coord->Y < -1.0f) coord->Y = -1.0f;
 }
 
-inline static size_t _random_uint64_t()
+inline static unsigned long long _random_uint64_t()
 {
-    return ((size_t)rand() << 32) | rand();
+    return ((unsigned long long)rand() << 32) | rand();
 }
 
 static MENU _find_menu_by_id(unsigned long long saved_id)
@@ -1578,14 +1585,19 @@ static void _renderMenu(MENU used_menu)
                                                                                         _block_input(&old_mode);
                                                                                         _reset_mouse_state();
 
-                                                                                        // resetting menu values
-                                                                                        last_selected_index = DISABLED;
-                                                                                        cached_selected_index = used_menu->selected_index;
-                                                                                        used_menu->selected_index = DISABLED;
+																						/* in proccess of rethinking this...
+                                                                                        if (selected_by_mouse)
+                                                                                            {
+                                                                                                // resetting menu values
+                                                                                                last_selected_index = DISABLED;
+                                                                                                cached_selected_index = used_menu->selected_index;
+                                                                                                used_menu->selected_index = DISABLED;
 
-                                                                                        // redrawing (clearing any selected option before the call)
-                                                                                        _performDirtyRedraw(used_menu, last_selected_index, cached_selected_index, _draw_render_unit_func);
-
+                                                                                                // redrawing (clearing any selected option before the call)
+                                                                                                _performDirtyRedraw(used_menu, last_selected_index, cached_selected_index, _draw_render_unit_func);
+                                                                                            }
+																						*/
+																						
                                                                                         // swapping
                                                                                         _setConsoleActiveScreenBuffer(used_menu->hBuffer[used_menu->active_buffer]);
                                                                                     }

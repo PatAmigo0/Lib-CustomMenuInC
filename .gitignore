@@ -1,2 +1,8 @@
-/menu.o
-/.gitignore
+*.o
+*.lib
+*.ibj
+*.exp
+*.dll
+*.obj
+*.vscode
+*.gitignore
