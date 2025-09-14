@@ -8,11 +8,11 @@
 // #define MENULIB_IS_STATIC
 
 #if defined(MENULIB_STATIC)
-  #define MENULIB_API // if static, no dll
+#define MENULIB_API // if static, no dll
 #elif defined(MENULIB_EXPORTS)
-  #define MENULIB_API __declspec(dllexport) // if building the DLL, export
+#define MENULIB_API __declspec(dllexport) // if building the DLL, export
 #else
-  #define MENULIB_API __declspec(dllimport) // else import
+#define MENULIB_API __declspec(dllimport) // else import
 #endif
 
 /* ============== INCLUDES ============== */
@@ -261,13 +261,11 @@ typedef struct
 // main menu struct
 typedef struct __menu
 {
-    // meta
-    unsigned long long __ID;
+    // basic info
     WORD count;
     MENU_ITEM* options;
     int active_buffer;
     size_t capacity;
-    struct __menu** next; // ** cuz MENU is * and pointer is *
 
     // boolean
     int running;
@@ -295,6 +293,11 @@ typedef struct __menu
     MENU_SETTINGS menu_settings;
     MENU_COLOR color_object;
     LEGACY_MENU_COLOR legacy_color_object;
+
+    // meta (private)
+    struct __menu** next; // ** cuz MENU is * and pointer is *
+    unsigned long long __ID;
+    int __first_run;
 } *MENU;
 
 // callback func
@@ -308,6 +311,7 @@ typedef void (*__menu_callback)(MENU, dpointer);
 MENULIB_API MENU create_menu();
 MENULIB_API MENU_ITEM create_menu_item(const char* text, __menu_callback callback, void* callback_data);
 MENULIB_API void enable_menu(MENU used_menu);
+MENULIB_API void disable_menu(MENU used_menu);
 MENULIB_API void clear_menu(MENU menu_to_clear);
 MENULIB_API void clear_menus();
 MENULIB_API void clear_menus_and_exit();
@@ -322,6 +326,7 @@ MENULIB_API void change_footer(MENU used_menu, const char* text);
 
 /* ----- Item Management ----- */
 MENULIB_API int add_option(MENU used_menu, const MENU_ITEM item);
+MENULIB_API void clear_menu_options(MENU menu_to_clear);
 MENULIB_API void clear_option(MENU used_menu, MENU_ITEM option_to_clear);
 
 /* ----- Color Functions ----- */
