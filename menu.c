@@ -276,6 +276,7 @@ MENULIB_API MENU create_menu()
         }
     new_menu->running = FALSE;
     new_menu->__ID = _random_uint64_t();
+    new_menu->__first_run = TRUE;
 
     new_menu->menu_settings = create_new_settings();
     new_menu->color_object = create_color_object();
@@ -434,12 +435,55 @@ MENULIB_API void enable_menu(MENU used_menu)
         _show_error_and_wait_extended(used_menu);
 
     used_menu->running = 1;
-    used_menu->selected_index = 0;
-    _setConsoleActiveScreenBuffer(used_menu->hBuffer[used_menu->active_buffer]);
+
+    if (used_menu->__first_run)
+        {
+            used_menu->__first_run = FALSE;
+            used_menu->selected_index = 0;
+        }
+
     _renderMenu(used_menu);
 }
 
+MENULIB_API void disable_menu(MENU used_menu)
+{
+    if (!used_menu || used_menu->count == 0)
+        {
+            _lwrite_string(hConsoleError, "Error: Menu has no options. Use add_option first!");
+            exit(BAD_MENU);
+        }
+
+    used_menu->running = 0;
+}
+
 /* ----- Cleanup Functions ----- */
+MENULIB_API void clear_menu_options(MENU menu_to_clear)
+{
+    if (!menu_to_clear) return;
+
+    // free all existing options if they exist
+    if (menu_to_clear->options != NULL && menu_to_clear->count > 0)
+        {
+            for (int i = 0; i < menu_to_clear->count; i++)
+                if (menu_to_clear->options[i])
+                    {
+                        free(menu_to_clear->options[i]->text);
+                        free(menu_to_clear->options[i]);
+                    }
+            free(menu_to_clear->options);
+        }
+
+    // reset the menu's state to be empty but still valid
+    menu_to_clear->options = NULL;
+    menu_to_clear->count = 0;
+    menu_to_clear->capacity = 0;
+    menu_to_clear->selected_index = 0;
+    menu_to_clear->full_redraw = TRUE;
+
+    // recalculate the base size of the now-empty menu
+    _get_menu_size(menu_to_clear);
+}
+
 MENULIB_API void clear_option(MENU used_menu, MENU_ITEM option_to_clear)
 {
     MENU_ITEM* o = used_menu->options;
@@ -1350,15 +1394,17 @@ inline static void _performDirtyRedraw(MENU used_menu, int last_selected_index, 
     int previous_index = (last_selected_index != DISABLED) ? last_selected_index : cached_selected_index;
 
     // un-highlight the previous option (previous_index is never going to be negative due to the how event handler works)
-    WORD is_selected = FALSE;
-    MENU_ITEM previous_option = used_menu->options[previous_index];
-    option_render_unit.text = previous_option->text;
-    option_render_unit.extra_data = (void*)&is_selected;
-    _draw_render_unit_func(rargument, (COORD)
-    {
-        previous_option->x_position, previous_option->boundaries.Y
-    }, &option_render_unit);
-
+    if (previous_index != DISABLED)
+        {
+            WORD is_selected = FALSE;
+            MENU_ITEM previous_option = used_menu->options[previous_index];
+            option_render_unit.text = previous_option->text;
+            option_render_unit.extra_data = (void*)&is_selected;
+            _draw_render_unit_func(rargument, (COORD)
+            {
+                previous_option->x_position, previous_option->boundaries.Y
+            }, &option_render_unit);
+        }
 
     // highlight the new option
     if (selected_index != DISABLED)
@@ -1406,6 +1452,7 @@ static void _renderMenu(MENU used_menu)
         cached_selected_index = DISABLED,
         can_tick = TRUE,
         selected_by_mouse = FALSE;
+    int selected_index;
 
     unsigned long long saved_id; // saved menu ID to verify menu validity after callbacks
     static int something_is_selected; // static flag persisting between function calls
@@ -1438,6 +1485,7 @@ static void _renderMenu(MENU used_menu)
     used_menu->full_redraw = TRUE; // THIS FLAG IS SET TO TRUE IN SOME FUNCTIONS / WHEN SIZE CHECKING (AND IT CHANGES)
 
     used_menu->selected_index = used_menu->menu_settings.mouse_enabled ? DISABLED : 0;
+    selected_index = used_menu->selected_index;
 
     RenderUnitDrawer _draw_render_unit_func = (vt100_support && used_menu->menu_settings.force_legacy_mode ^ 1)
             ? _draw_render_unit
@@ -1456,9 +1504,10 @@ static void _renderMenu(MENU used_menu)
     mouse_status = FALSE;
 #endif
 
+    _setConsoleActiveScreenBuffer(used_menu->hBuffer[used_menu->active_buffer]);
     _reset_mouse_state();
     _block_input(&old_mode);
-
+    fflush(stdin);
     FlushConsoleInputBuffer(hStdin);
     if (menus_array[0]->__ID == used_menu->__ID) _ensure_safe_startup(); // running only for the first menu
 
@@ -1468,6 +1517,7 @@ static void _renderMenu(MENU used_menu)
             _draw_at_position(hCurrent, 0, 4, "loop cycle: %llu", ++tick_count);
             _draw_at_position(hCurrent, 0, 8, "need redraw: %d", used_menu->need_redraw);
             _draw_at_position(hCurrent, 0, 12, "mouse status: %d", mouse_status);
+            _draw_at_position(hCurrent, 0, 34, "selected: %d, previous: %d, cached: %d      ", selected_index, last_selected_index, cached_selected_index);
 #endif
             if (can_tick)
                 {
@@ -1497,7 +1547,7 @@ static void _renderMenu(MENU used_menu)
 
             if (used_menu->need_redraw)
                 {
-                    int selected_index = used_menu->selected_index;
+                    selected_index = used_menu->selected_index;
                     // cache the last known valid index. This is crucial for dirty redraws
                     // when the mouse moves off all options (selected_index becomes DISABLED).
                     if (selected_index != DISABLED) cached_selected_index = selected_index;
@@ -1555,7 +1605,7 @@ static void _renderMenu(MENU used_menu)
                                                                         selected_by_mouse = FALSE;
                                                                         break;
                                                                     case VK_RETURN: // ENTER
-                                                                        if (used_menu->selected_index >= 0 && used_menu->options[used_menu->selected_index]->callback && used_menu->options[used_menu->selected_index]->callback != NULL)
+                                                                        if (used_menu->selected_index >= 0 && used_menu->options[used_menu->selected_index]->callback)
                                                                             {
                                                                             input_handler:
                                                                                 ;
@@ -1585,7 +1635,7 @@ static void _renderMenu(MENU used_menu)
                                                                                         _block_input(&old_mode);
                                                                                         _reset_mouse_state();
 
-																						/* in proccess of rethinking this...
+                                                                                        /* in proccess of rethinking this...
                                                                                         if (selected_by_mouse)
                                                                                             {
                                                                                                 // resetting menu values
@@ -1596,13 +1646,14 @@ static void _renderMenu(MENU used_menu)
                                                                                                 // redrawing (clearing any selected option before the call)
                                                                                                 _performDirtyRedraw(used_menu, last_selected_index, cached_selected_index, _draw_render_unit_func);
                                                                                             }
-																						*/
-																						
+                                                                                        */
+
                                                                                         // swapping
                                                                                         _setConsoleActiveScreenBuffer(used_menu->hBuffer[used_menu->active_buffer]);
                                                                                     }
                                                                                 else goto end_render_loop;
                                                                             }
+                                                                        else used_menu->need_redraw = FALSE; // if selected but enter is not at valid index
                                                                         break;
                                                                     case VK_ESCAPE:
                                                                         clear_menu(used_menu);
