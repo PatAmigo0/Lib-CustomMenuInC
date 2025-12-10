@@ -409,10 +409,16 @@ MENULIB_API int add_option(MENU used_menu, const MENU_ITEM item)
     return 0;
 }
 
+MENULIB_API void set_redraw(MENU menu) {
+	menu->full_redraw = 1; 
+    menu->need_redraw = 1; 
+}
+
 MENULIB_API void change_header(MENU used_menu, const char* restrict text)
 {
     used_menu->header = strdup(text);
     used_menu->header_len = _count_utf8_chars(used_menu->header);
+    set_redraw(used_menu);
     _get_menu_size(used_menu);
 }
 
@@ -420,6 +426,7 @@ MENULIB_API void change_footer(MENU used_menu, const char* restrict text)
 {
     used_menu->footer = strdup(text);
     used_menu->footer_len = _count_utf8_chars(used_menu->footer);
+	set_redraw(used_menu);
     _get_menu_size(used_menu);
 }
 
@@ -436,7 +443,7 @@ MENULIB_API void enable_menu(MENU used_menu)
 
     used_menu->running = 1;
 
-    if (used_menu->__first_run)
+    if (used_menu->__first_run == TRUE)
         {
             used_menu->__first_run = FALSE;
             used_menu->selected_index = 0;

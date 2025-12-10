@@ -4,8 +4,8 @@
 #define _MENU_H_
 
 /* ============== DLL SETUP ============== */
-// uncomment or add a compiler flag if c/cpp lib is needed
-// #define MENULIB_IS_STATIC
+// comment or add a compiler flag if dynamic lib is needed
+#define MENULIB_IS_STATIC
 
 #if defined(MENULIB_STATIC)
 #define MENULIB_API // if static, no dll
