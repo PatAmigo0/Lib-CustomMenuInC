@@ -70,7 +70,7 @@ int main()
 {
     MENU main_menu = create_menu();
 
-    // Create menu items with associated data
+    // create menu items with associated data
     add_option(main_menu, create_menu_item("Option 1", menu_callback, "First option"));
     add_option(main_menu, create_menu_item("Option 2", menu_callback, "Second option"));
     add_option(main_menu, create_menu_item("Exit", menu_callback, "Exiting..."));
